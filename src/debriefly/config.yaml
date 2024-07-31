@@ -1,0 +1,10 @@
+# A section for testing purposes
+test:
+  aint: 42
+  afloat: 3.1415
+  astring: "Hello, World!"
+  alist:
+    - "blinky"
+    - "pinky"
+    - "inky"
+    - "clyde"

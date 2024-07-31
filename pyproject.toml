@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "debriefly"
+authors = [
+  {name="Vineet Bansal", email="vineetb@princeton.edu"}
+]
+description = "Debriefly speaking, this does very little."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+]
+
+dependencies = [
+    "fastapi",
+    "gradio",
+    "jinja2",
+    "openai",
+    "python-dotenv",
+]
+dynamic = ["version"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools_scm]
+write_to = "src/debriefly/_version.py"
+
+[tool.setuptools.package-data]
+debriefly = ["config.yaml", "data/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-sv"
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "coverage",
+    "coveralls",
+    "myst-parser",
+    "pre-commit",
+    "pytest",
+    "sphinx",
+    "sphinxcontrib-bibtex",
+    "sphinx_rtd_theme",
+    "twine"
+]
