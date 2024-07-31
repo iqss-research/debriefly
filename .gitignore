@@ -1,0 +1,11 @@
+.env
+.DS_Store
+*.egg-info
+*.pyc
+.idea
+__pycache__
+.pytest_cache
+/build/
+
+# version file (managed by setuptools-scm)
+src/debriefly/_version.py
