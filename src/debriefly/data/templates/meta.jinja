@@ -1,0 +1,12 @@
+For a user survey, I'm giving you a list of question IDs and the text associated with each question.
+Which of the following survey questions is most likely to confuse respondents?
+Just give me the question ID.
+
+{% for q in questions %}
+{{ q.question_id }}. {{ q.question_text }}
+{% if q.question_type == "MC" %}
+    {% for choice_id, choice_text in q.choices.items() %}
+        {{ choice_id }}. {{ choice_text }}
+    {% endfor %}
+{% endif %}
+{% endfor %}

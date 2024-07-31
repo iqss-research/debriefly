@@ -3,20 +3,33 @@ from json import loads
 import logging
 import os
 import requests
-
+from jinja2 import Environment, PackageLoader, select_autoescape
 
 logger = logging.getLogger(__name__)
 
 
 class QualtricsQuestion:
-    def __init__(self, question):
-        self.question_type = question["type"]
-        self.question_id = question["questionId"]
-        self.display = question["display"]
-        self.choices = question.get("choices", [])
-        self.choices_inv = {
-            choice["display"]: choice["choiceId"] for choice in self.choices
+    def __init__(
+        self, question_type, question_id, question_text, choices={}, choices_inv={}
+    ):
+        self.question_type = question_type
+        self.question_id = question_id
+        self.question_text = question_text
+        self.choices = choices
+        self.choices_inv = choices_inv
+
+    @classmethod
+    def from_dict(cls, question_id, question_dict):
+        choices = {
+            k: v["choiceText"] for k, v in question_dict.get("choices", {}).items()
         }
+        return cls(
+            question_type=question_dict["questionType"]["type"],
+            question_id=question_id,
+            question_text=question_dict["questionText"],
+            choices=choices,
+            choices_inv={v: k for k, v in choices.items()},
+        )
 
     def __str__(self):
         match self.question_type:
@@ -27,11 +40,11 @@ class QualtricsQuestion:
                         for choice in self.choices
                     ]
                 )
-                return f"{self.display} (mcq)" + f"\nChoices: {choices}"
+                return f"{self.question_text} (mcq)" + f"\nChoices: {choices}"
             case "te":
-                return f"{self.display} (text)"
+                return f"{self.question_text} (text)"
             case _:
-                return f"{self.display} ({self.question_type})"
+                return f"{self.question_text} ({self.question_type})"
 
     def prompt(self):
         print(self)
@@ -52,9 +65,17 @@ class QualtricsRequest:
         self.api_token = api_token or os.environ["Q_API_TOKEN"]
         self.base_url = f"https://{data_center}.qualtrics.com/API/v3"
 
-    def make_request(self, url, json={}, raise_for_status=False):
+    def make_request(self, url, json={}, method="post", raise_for_status=False):
+        match method:
+            case "get":
+                request_fn = requests.get
+            case "post":
+                request_fn = requests.post
+            case _:
+                raise NotImplementedError
+
         url = f"{self.base_url}/{url}"
-        response = requests.post(
+        response = request_fn(
             url,
             json=json,
             headers={"x-api-token": self.api_token, "Content-Type": "application/json"},
@@ -63,19 +84,73 @@ class QualtricsRequest:
             response.raise_for_status()
         response = loads(response.text)
 
-        logger.debug(f"post request: {url} json={json}")
-        logger.debug(f"post response: {response}")
+        logger.debug(f"{method} request: {url} json={json}")
+        logger.debug(f"{method} response: {response}")
 
         return response
 
 
-class QualtricsSession(QualtricsRequest):
+class QualtricsSurvey(QualtricsRequest):
     def __init__(self, survey_id, data_center=None, api_token=None):
+        super().__init__(data_center, api_token)
+        self.survey_id = survey_id
+
+        url = f"surveys/{self.survey_id}"
+        response = self.make_request(url, method="get")
+
+        # mapping from question_id to QualtricsQuestion
+        self.questions = {
+            k: QualtricsQuestion.from_dict(k, v)
+            for k, v in response["result"]["questions"].items()
+        }
+
+    def get_debriefing_question(
+        self, client, model="gpt-4o-mini", template_name="meta"
+    ):
+
+        logger.info("Determining debriefing question")
+        if client is None:
+            logger.info(
+                "No OpenAI client provided; Skipping debriefing question selection."
+            )
+            return None
+
+        env = Environment(
+            loader=PackageLoader("debriefly.data.templates", package_path=""),
+            autoescape=select_autoescape(),
+        )
+        template = env.get_template(f"{template_name}.jinja")
+        template_str = template.render(questions=self.questions.values())
+
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "user", "content": template_str},
+            ],
+        )
+
+        selected_question_id = completion.choices[0].message.content
+        if selected_question_id not in self.questions:
+            logger.error(f"Unexpected {selected_question_id=}")
+        else:
+            logger.info(f"Debriefing question = {selected_question_id}")
+            return self.questions[selected_question_id]
+
+
+class QualtricsSession(QualtricsRequest):
+    def __init__(
+        self, survey_id, data_center=None, api_token=None, openapi_client=None
+    ):
         super().__init__(data_center, api_token)
         self.survey_id = survey_id
         self.session_id = None
         self._questions = []
         self.done = False
+
+        self.survey = QualtricsSurvey(survey_id=survey_id)
+        self.debriefing_question = self.survey.get_debriefing_question(
+            client=openapi_client
+        )
 
     def questions(self):
         if self.done:
@@ -95,13 +170,34 @@ class QualtricsSession(QualtricsRequest):
     def submit(self, answers):
         url = f"surveys/{self.survey_id}/sessions/{self.session_id}"
         json = {"advance": False if self.done else True, "responses": answers}
+
+        # Detect if we're at the end of the survey, and embed the debriefing transcript
+        if self.debriefing_question.question_id in answers:
+            json |= {
+                "embeddedData": {
+                    "debriefly": "debriefing transcript for "
+                    + answers[self.debriefing_question.question_id]
+                }
+            }
+
         response = self.make_request(url, json=json)
         if not self.done:
             result = response["result"]
             self.process(result)
 
     def process(self, result):
-        self._questions = [QualtricsQuestion(q) for q in result["questions"]]
+        self._questions = []
+        for q in result["questions"]:
+            choices = q.get("choices", {})
+            choices_inv = {c["display"]: c["choiceId"] for c in choices}
+            qualtrics_question = QualtricsQuestion(
+                question_type=q["type"],
+                question_id=q["questionId"],
+                question_text=q["display"],
+                choices=choices,
+                choices_inv=choices_inv,
+            )
+            self._questions.append(qualtrics_question)
         self.done = result["done"]
 
     def run_terminal(self):
@@ -146,14 +242,14 @@ class QualtricsSession(QualtricsRequest):
                             for question in self.questions():
                                 if question.question_type == "te":
                                     new_txtbox = gr.Textbox(
-                                        label=f"Question {question.question_id}: {question.display}",
+                                        label=f"Question {question.question_id}: {question.question_text}",
                                         value="",
                                         lines=5,
                                         interactive=True,
                                     )
                                 else:
                                     new_txtbox = gr.Radio(
-                                        label=f"Question {question.question_id}: {question.display}",
+                                        label=f"Question {question.question_id}: {question.question_text}",
                                         choices=[
                                             choice["display"]
                                             for choice in question.choices
