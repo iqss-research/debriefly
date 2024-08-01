@@ -3,9 +3,52 @@ from json import loads
 import logging
 import os
 import requests
+from requests_oauth2client import OAuth2Client, OAuth2ClientCredentialsAuth
 from jinja2 import Environment, PackageLoader, select_autoescape
+from debriefly import config
 
 logger = logging.getLogger(__name__)
+
+
+class QualtricsSession:
+    def __init__(
+        self, data_center=None, api_token=None, client_id=None, client_secret=None
+    ):
+        self.data_center = data_center or os.getenv("Q_DATA_CENTER")
+        assert self.data_center, "data_center is required"
+        self.api_token = api_token or os.getenv("Q_API_TOKEN")
+
+        if not self.api_token:
+            client_id = client_id or os.getenv("Q_CLIENT_ID")
+            client_secret = client_secret or os.getenv("Q_CLIENT_SECRET")
+            assert (
+                client_id and client_secret
+            ), "client_id and client_secret are required"
+
+            self.auth = OAuth2ClientCredentialsAuth(
+                OAuth2Client(
+                    token_endpoint=config.qualtrics.oauth2_token_endpoint,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                ),
+                scope=config.qualtrics.oauth2_scope,
+            )
+
+        else:
+            self.auth = None
+
+        self.base_api_url = f"https://{data_center}.qualtrics.com/API/v3"
+
+    def __enter__(self):
+        kwargs = {"headers": {"Content-Type": "application/json"}}
+        if self.api_token:
+            kwargs["headers"]["x-api-token"] = self.api_token
+        if self.auth:
+            kwargs["auth"] = self.auth
+        QualtricsRequest.default_request_kwargs = kwargs
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        QualtricsRequest.default_request_kwargs = {}
 
 
 class QualtricsQuestion:
@@ -60,9 +103,16 @@ class QualtricsQuestion:
 
 
 class QualtricsRequest:
+
+    # Set by enclosing QualtricsSession context-manager
+    default_request_kwargs = {}
+
     def __init__(self, data_center=None, api_token=None):
-        self.data_center = data_center or os.environ["Q_DATA_CENTER"]
-        self.api_token = api_token or os.environ["Q_API_TOKEN"]
+        data_center = data_center or os.getenv("Q_DATA_CENTER")
+        assert data_center, "data_center is required"
+
+        self.data_center = data_center
+        self.api_token = api_token or os.getenv("Q_API_TOKEN")
         self.base_url = f"https://{data_center}.qualtrics.com/API/v3"
 
     def make_request(self, url, json={}, method="post", raise_for_status=False):
@@ -78,13 +128,15 @@ class QualtricsRequest:
         response = request_fn(
             url,
             json=json,
-            headers={"x-api-token": self.api_token, "Content-Type": "application/json"},
+            **self.default_request_kwargs,
         )
         if raise_for_status:
             response.raise_for_status()
         response = loads(response.text)
 
-        logger.debug(f"{method} request: {url} json={json}")
+        logger.debug(
+            f"{method} request: {url} json={json} kwargs={self.default_request_kwargs}"
+        )
         logger.debug(f"{method} response: {response}")
 
         return response
@@ -137,20 +189,30 @@ class QualtricsSurvey(QualtricsRequest):
             return self.questions[selected_question_id]
 
 
-class QualtricsSession(QualtricsRequest):
+class QualtricsSurveySession(QualtricsRequest):
     def __init__(
-        self, survey_id, data_center=None, api_token=None, openapi_client=None
+        self,
+        survey_id,
+        data_center=None,
+        api_token=None,
+        openai_client=None,
+        debriefing_question=None,
     ):
         super().__init__(data_center, api_token)
         self.survey_id = survey_id
         self.session_id = None
         self._questions = []
         self.done = False
+        self.openai_client = openai_client
 
         self.survey = QualtricsSurvey(survey_id=survey_id)
-        self.debriefing_question = self.survey.get_debriefing_question(
-            client=openapi_client
-        )
+
+        if debriefing_question == "auto":
+            self.debriefing_question = self.survey.get_debriefing_question(
+                client=self.openai_client
+            )
+        elif debriefing_question is not None:
+            self.debriefing_question = self.survey.questions[debriefing_question]
 
     def questions(self):
         if self.done:
@@ -167,23 +229,28 @@ class QualtricsSession(QualtricsRequest):
         self.session_id = result["sessionId"]
         self.process(result)
 
-    def submit(self, answers):
+    def submit(self, answers={}, embedded_data=None):
         url = f"surveys/{self.survey_id}/sessions/{self.session_id}"
-        json = {"advance": False if self.done else True, "responses": answers}
+        json = {"responses": answers}
+        if embedded_data is not None:
+            json["advance"] = False
+            json["embeddedData"] = {"debriefly": str(embedded_data)}
+        else:
+            json["advance"] = not self.done
 
         # Detect if we're at the end of the survey, and embed the debriefing transcript
-        if self.debriefing_question.question_id in answers:
-            json |= {
-                "embeddedData": {
-                    "debriefly": "debriefing transcript for "
-                    + answers[self.debriefing_question.question_id]
-                }
-            }
+        launch_debriefing = False
+        debriefing_q = self.debriefing_question
+        if debriefing_q is not None and debriefing_q.question_id in answers:
+            logger.info(f"{debriefing_q} found in answers. Launching debriefing.")
+            launch_debriefing = True
 
         response = self.make_request(url, json=json)
         if not self.done:
             result = response["result"]
             self.process(result)
+
+        return launch_debriefing
 
     def process(self, result):
         self._questions = []
@@ -200,94 +267,130 @@ class QualtricsSession(QualtricsRequest):
             self._questions.append(qualtrics_question)
         self.done = result["done"]
 
+    def predict(self, message, history):
+        history_openai_format = []
+        for human, assistant in history:
+            history_openai_format.append({"role": "user", "content": human})
+            history_openai_format.append({"role": "assistant", "content": assistant})
+        history_openai_format.append({"role": "user", "content": message})
+
+        response = self.openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=history_openai_format,
+            temperature=1.0,
+            stream=True,
+        )
+
+        partial_message = ""
+        for chunk in response:
+            if chunk.choices[0].delta.content is not None:
+                partial_message = partial_message + chunk.choices[0].delta.content
+                yield partial_message
+
     def run_terminal(self):
         while not self.done:
             answers = {}
             for question in self.questions():
                 answer = question.prompt()
                 answers |= answer
-            self.submit(answers)
+            launch_debriefing = self.submit(answers)
+            if launch_debriefing:
+                print("Debriefing not supported in terminal mode.")
         print(self.done)
 
     def get_ui(self):
         with gr.Blocks() as ui:
 
             page_number_state = gr.State(0)
+            launch_debriefing_state = gr.State(False)
 
             gr.Markdown("### Survey")
             with gr.Column():
 
-                @gr.render(inputs=[page_number_state])
-                def render_page(page_number):
-                    if page_number <= 0:
-                        boxes = [
-                            gr.Textbox(
-                                label="",
-                                value="Click on Next to begin",
-                                interactive=False,
-                            )
-                        ]
+                @gr.render(inputs=[page_number_state, launch_debriefing_state])
+                def render_page(page_number, launch_debriefing):
+
+                    boxes = []
+                    if launch_debriefing:
+                        chatbot = gr.Chatbot(height=200)
+                        boxes.append(chatbot)
                     else:
-                        if self.done:
+                        if page_number <= 0:
                             boxes = [
                                 gr.Textbox(
-                                    label="Survey Completed",
-                                    value=f"{self.done}",
-                                    lines=2,
+                                    label="",
+                                    value="Click on Next to begin",
                                     interactive=False,
                                 )
                             ]
                         else:
-                            boxes = []
-                            for question in self.questions():
-                                if question.question_type == "te":
-                                    new_txtbox = gr.Textbox(
-                                        label=f"Question {question.question_id}: {question.question_text}",
-                                        value="",
-                                        lines=5,
-                                        interactive=True,
+                            if self.done:
+                                boxes = [
+                                    gr.Textbox(
+                                        label="Survey Completed",
+                                        value=f"{self.done}",
+                                        lines=2,
+                                        interactive=False,
                                     )
-                                else:
-                                    new_txtbox = gr.Radio(
-                                        label=f"Question {question.question_id}: {question.question_text}",
-                                        choices=[
-                                            choice["display"]
-                                            for choice in question.choices
-                                        ],
-                                        interactive=True,
-                                    )
-
-                                boxes.append(new_txtbox)
-
-                    def submit_fn(page_number, *box_values):
-                        if page_number == 0:
-                            self.start_session()
-                        else:
-                            if not self.done:
-
-                                answers = {}
-                                for question, box_value in zip(
-                                    self.questions(), box_values
-                                ):
+                                ]
+                            else:
+                                boxes = []
+                                for question in self.questions():
                                     if question.question_type == "te":
-                                        answer = {question.question_id: box_value}
-                                        answers |= answer
+                                        new_txtbox = gr.Textbox(
+                                            label=f"Question {question.question_id}: {question.question_text}",
+                                            value="",
+                                            lines=5,
+                                            interactive=True,
+                                        )
                                     else:
-                                        selected_id = question.choices_inv[box_value]
-                                        answer = {
-                                            question.question_id: {
-                                                selected_id: {"selected": True}
-                                            }
-                                        }
-                                    answers |= answer
+                                        new_txtbox = gr.Radio(
+                                            label=f"Question {question.question_id}: {question.question_text}",
+                                            choices=[
+                                                choice["display"]
+                                                for choice in question.choices
+                                            ],
+                                            interactive=True,
+                                        )
 
-                                self.submit(answers)
-                        return page_number + 1
+                                    boxes.append(new_txtbox)
+
+                    def submit_fn(page_number, is_debriefing, *box_values):
+                        launch_debriefing = False
+                        if is_debriefing:
+                            launch_debriefing = self.submit(
+                                embedded_data="debriefing transcript here!"
+                            )
+                        else:
+                            if page_number == 0:
+                                self.start_session()
+                            else:
+                                if not self.done:
+                                    answers = {}
+                                    for question, box_value in zip(
+                                        self.questions(), box_values
+                                    ):
+                                        if question.question_type == "te":
+                                            answer = {question.question_id: box_value}
+                                            answers |= answer
+                                        else:
+                                            selected_id = question.choices_inv[
+                                                box_value
+                                            ]
+                                            answer = {
+                                                question.question_id: {
+                                                    selected_id: {"selected": True}
+                                                }
+                                            }
+                                        answers |= answer
+
+                                    launch_debriefing = self.submit(answers)
+                        return page_number + 1, launch_debriefing
 
                     next_btn.click(
                         submit_fn,
-                        inputs=[page_number_state] + boxes,
-                        outputs=page_number_state,
+                        inputs=[page_number_state, launch_debriefing_state] + boxes,
+                        outputs=[page_number_state, launch_debriefing_state],
                     )
 
                 next_btn = gr.Button("Next")

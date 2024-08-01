@@ -1,3 +1,8 @@
+qualtrics:
+  oauth2_token_endpoint: "https://env.qualtrics.com/oauth2/token"
+  oauth2_scope: "manage:all read:users"
+
+
 # A section for testing purposes
 test:
   aint: 42

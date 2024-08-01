@@ -22,6 +22,8 @@ dependencies = [
     "jinja2",
     "openai",
     "python-dotenv",
+    "requests",
+    "requests_oauth2client"
 ]
 dynamic = ["version"]
 

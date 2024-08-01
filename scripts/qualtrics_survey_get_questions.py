@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from debriefly.qualtrics import QualtricsSurvey
+from debriefly.qualtrics import QualtricsSession, QualtricsSurvey
 
 
 if __name__ == "__main__":
@@ -12,6 +12,9 @@ if __name__ == "__main__":
         project=os.environ["OPENAI_PROJECT_ID"],
     )
 
-    survey = QualtricsSurvey(survey_id="SV_8ADyHCnFttPUPJA")
-    selected_question = survey.get_debriefing_question(client=client)
-    print(selected_question)
+    with QualtricsSession() as session:
+        survey = QualtricsSurvey(survey_id="SV_8ADyHCnFttPUPJA")
+        print(survey.questions)
+
+        selected_question = survey.get_debriefing_question(client=client)
+        print(selected_question)
