@@ -13,7 +13,11 @@ completion = client.chat.completions.create(
     model="gpt-4o-mini",
     messages=[
         {"role": "system", "content": "You answer all questions in two words"},
-        {"role": "user", "content": "What is the meaning of life?"},
+        {
+            "role": "assistant",
+            "content": "Please ask me a question and I will reply in two words.",
+        },
+        {"role": "user", "content": "What is the capital of France?"},
     ],
 )
 

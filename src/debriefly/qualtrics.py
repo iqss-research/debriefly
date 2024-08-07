@@ -147,6 +147,10 @@ class QualtricsSurvey(QualtricsRequest):
         super().__init__(data_center, api_token)
         self.survey_id = survey_id
 
+        # populated on populate_system_message()
+        self.system_message = ""
+        self.initial_message = ""  # TODO: collapse into system_message?
+
         url = f"surveys/{self.survey_id}"
         response = self.make_request(url, method="get")
 
@@ -187,6 +191,38 @@ class QualtricsSurvey(QualtricsRequest):
         else:
             logger.info(f"Debriefing question = {selected_question_id}")
             return self.questions[selected_question_id]
+
+    def populate_system_message(self, client, **kwargs):
+        logger.info("Determining debriefing question")
+        if client is None:
+            raise RuntimeError("No OpenAI client provided")
+
+        env = Environment(
+            loader=PackageLoader("debriefly.data.templates", package_path=""),
+            autoescape=select_autoescape(),
+        )
+
+        self.system_message = env.get_template("system_message.jinja").render(**kwargs)
+        self.initial_message = env.get_template("initial_message.jinja").render(
+            **kwargs
+        )
+
+    def chat(self, client, user_input, chat_history, model="gpt-4o-mini"):
+        messages = [{"role": "system", "content": self.system_message}]
+        for human_input, assistant_response in chat_history:
+            if human_input is not None:
+                messages.append({"role": "user", "content": human_input})
+            messages.append({"role": "assistant", "content": assistant_response})
+        messages.append({"role": "user", "content": user_input})
+
+        completion = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=1.0,
+            stream=False,
+        )
+
+        return completion.choices[0].message.content
 
 
 class QualtricsSurveySession(QualtricsRequest):
@@ -238,19 +274,18 @@ class QualtricsSurveySession(QualtricsRequest):
         else:
             json["advance"] = not self.done
 
-        # Detect if we're at the end of the survey, and embed the debriefing transcript
-        launch_debriefing = False
+        debriefing_q_a = {}
         debriefing_q = self.debriefing_question
         if debriefing_q is not None and debriefing_q.question_id in answers:
-            logger.info(f"{debriefing_q} found in answers. Launching debriefing.")
-            launch_debriefing = True
+            logger.info(f"Debriefing Question: {debriefing_q} found in answers.")
+            debriefing_q_a[debriefing_q] = answers[debriefing_q.question_id]
 
         response = self.make_request(url, json=json)
         if not self.done:
             result = response["result"]
             self.process(result)
 
-        return launch_debriefing
+        return debriefing_q_a
 
     def process(self, result):
         self._questions = []
@@ -267,42 +302,49 @@ class QualtricsSurveySession(QualtricsRequest):
             self._questions.append(qualtrics_question)
         self.done = result["done"]
 
-    def predict(self, message, history):
-        history_openai_format = []
-        for human, assistant in history:
-            history_openai_format.append({"role": "user", "content": human})
-            history_openai_format.append({"role": "assistant", "content": assistant})
-        history_openai_format.append({"role": "user", "content": message})
-
-        response = self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=history_openai_format,
-            temperature=1.0,
-            stream=True,
-        )
-
-        partial_message = ""
-        for chunk in response:
-            if chunk.choices[0].delta.content is not None:
-                partial_message = partial_message + chunk.choices[0].delta.content
-                yield partial_message
-
     def run_terminal(self):
         while not self.done:
             answers = {}
             for question in self.questions():
                 answer = question.prompt()
                 answers |= answer
-            launch_debriefing = self.submit(answers)
-            if launch_debriefing:
+            debriefing_q_a = self.submit(answers)
+            if debriefing_q_a:
                 print("Debriefing not supported in terminal mode.")
         print(self.done)
+
+    def chat(self, user_input, chat_history):
+        completion = self.survey.chat(self.openai_client, user_input, chat_history)
+        return "", chat_history + [(user_input, completion)]
+
+    def check_chat_end(
+        self,
+        chat_history: list[list[str | None]],
+        limit: int = 4,
+        end_of_interview: str = "<end_of_survey>",
+    ) -> tuple[list[list[str | None]], gr.Button, gr.Textbox, gr.Button]:
+        done = False
+        if len(chat_history) >= limit:
+            done = True
+        if end_of_interview in chat_history[-1][1]:
+            chat_history[-1][1] = chat_history[-1][1].replace(end_of_interview, "")
+            done = True
+
+        logger.info("Done with chat.")
+        input_textbox = gr.Textbox(visible=not done, show_label=False)
+        submit_button = gr.Button(
+            "Submit",
+            variant="primary",
+            visible=not done,
+        )
+        return chat_history, input_textbox, submit_button, done
 
     def get_ui(self):
         with gr.Blocks() as ui:
 
             page_number_state = gr.State(0)
-            launch_debriefing_state = gr.State(False)
+            launch_debriefing_state = gr.State({})
+            just_done_debriefing_state = gr.State(False)
 
             gr.Markdown("### Survey")
             with gr.Column():
@@ -312,8 +354,32 @@ class QualtricsSurveySession(QualtricsRequest):
 
                     boxes = []
                     if launch_debriefing:
-                        chatbot = gr.Chatbot(height=200)
-                        boxes.append(chatbot)
+                        logger.info("Launching Debriefing.")
+                        question, response = launch_debriefing.popitem()
+                        self.survey.populate_system_message(
+                            self.openai_client, question=question, response=response
+                        )
+                        chatbot = gr.Chatbot(
+                            value=[(None, self.survey.initial_message)], height=400
+                        )
+                        user_input = gr.Textbox(visible=True, show_label=False)
+                        submit_btn = gr.Button(
+                            "Submit", variant="primary", visible=True
+                        )
+                        submit_btn.click(
+                            self.chat, [user_input, chatbot], [user_input, chatbot]
+                        ).then(
+                            self.check_chat_end,
+                            inputs=[chatbot],
+                            outputs=[
+                                chatbot,
+                                user_input,
+                                submit_btn,
+                                just_done_debriefing_state,
+                            ],
+                        )
+
+                        boxes.extend([chatbot, user_input, submit_btn])
                     else:
                         if page_number <= 0:
                             boxes = [
@@ -355,12 +421,19 @@ class QualtricsSurveySession(QualtricsRequest):
 
                                     boxes.append(new_txtbox)
 
-                    def submit_fn(page_number, is_debriefing, *box_values):
-                        launch_debriefing = False
-                        if is_debriefing:
-                            launch_debriefing = self.submit(
-                                embedded_data="debriefing transcript here!"
+                    def submit_fn(page_number, just_done_debriefing, *box_values):
+                        debriefing_q_a = {}
+                        if just_done_debriefing:
+                            # Ugly!
+                            transcript = "\n\n".join(
+                                [
+                                    "\n".join([str(x[0]), str(x[1])])
+                                    for x in box_values[0]
+                                ]
                             )
+
+                            logger.info("Debriefing completed.")
+                            _ = self.submit(embedded_data=transcript)
                         else:
                             if page_number == 0:
                                 self.start_session()
@@ -384,13 +457,18 @@ class QualtricsSurveySession(QualtricsRequest):
                                             }
                                         answers |= answer
 
-                                    launch_debriefing = self.submit(answers)
-                        return page_number + 1, launch_debriefing
+                                    debriefing_q_a = self.submit(answers)
+
+                        return page_number + 1, debriefing_q_a, False
 
                     next_btn.click(
                         submit_fn,
-                        inputs=[page_number_state, launch_debriefing_state] + boxes,
-                        outputs=[page_number_state, launch_debriefing_state],
+                        inputs=[page_number_state, just_done_debriefing_state] + boxes,
+                        outputs=[
+                            page_number_state,
+                            launch_debriefing_state,
+                            just_done_debriefing_state,
+                        ],
                     )
 
                 next_btn = gr.Button("Next")

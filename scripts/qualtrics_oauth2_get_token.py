@@ -17,6 +17,6 @@ if __name__ == "__main__":
     auth = OAuth2ClientCredentialsAuth(oauth2client, scope="manage:all read:users")
 
     response = requests.get(
-        "https://sjci.qualtrics.com/API/v3/surveys/SV_8ADyHCnFttPUPJA", auth=auth
+        "https://sjc1.qualtrics.com/API/v3/surveys/SV_8ADyHCnFttPUPJA", auth=auth
     )
     pprint(response.json())
