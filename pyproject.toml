@@ -23,7 +23,8 @@ dependencies = [
     "openai",
     "python-dotenv",
     "requests",
-    "requests_oauth2client"
+    "requests_oauth2client",
+    "rich"
 ]
 dynamic = ["version"]
 
