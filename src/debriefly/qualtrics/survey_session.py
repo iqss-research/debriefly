@@ -24,10 +24,8 @@ class QualtricsSurveySession(QualtricsRequest):
     def submit(self, answers={}, embedded_data=None):
         json = {"responses": answers}
         if embedded_data is not None:
-            json["advance"] = False
             json["embeddedData"] = {"debriefly": str(embedded_data)}
-        else:
-            json["advance"] = not self.done
+        json["advance"] = not self.done
 
         self.make_request(url=self.session_id, json=json)
         if not self.done:
@@ -57,17 +55,28 @@ class QualtricsSurveySession(QualtricsRequest):
             self.questions[question.question_id] = question
         self.done = self.data["done"]
 
-    def run(self):
+    def run(self, debrief="last"):
+        assert debrief in (None, "immediate", "last")
+
         console = Console()
+        console.rule(f"Survey {self.survey.survey_id}")
         while not self.done:
             answers = {}
             for question in self.questions.values():
                 answer = question.prompt(console)
                 answers |= answer
 
-            if debriefing_q := self.submit(answers):
-                transcript = debriefing_q.prompt(console)
-                logger.info("Debriefing completed.")
-                self.submit(embedded_data=transcript)
+                if (
+                    debrief == "last"
+                    and self.survey.last_question.question_id in self.questions
+                ):
+                    if debriefing_q := self.survey.debriefing_question:
+                        transcript = debriefing_q.prompt(console)
+                        self.submit(answers, embedded_data=transcript)
 
-        return answers
+            if not self.done:
+                if (debriefing_q := self.submit(answers)) and debrief == "immediate":
+                    transcript = debriefing_q.prompt(console)
+                    self.submit(embedded_data=transcript)
+
+        console.print(self.done)

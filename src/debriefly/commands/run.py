@@ -1,0 +1,31 @@
+import os
+from openai import OpenAI
+from debriefly.qualtrics import (
+    QualtricsSession,
+    QualtricsSurvey,
+    QualtricsSurveySession,
+)
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def add_args(parser):
+    parser.add_argument("--survey_id", type=str, required=True)
+    return parser
+
+
+def run(survey_id):
+    openai_client = OpenAI(
+        organization=os.environ["OPENAI_ORG_ID"],
+        project=os.environ["OPENAI_PROJECT_ID"],
+    )
+
+    with QualtricsSession(openai_client=openai_client):
+        survey = QualtricsSurvey(survey_id=survey_id)
+        survey_session = QualtricsSurveySession(survey=survey)
+        survey_session.run()
+
+
+def main(args):
+    run(survey_id=args.survey_id)

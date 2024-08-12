@@ -1,5 +1,7 @@
+import time
 from logging import getLogger
 from rich.prompt import Prompt
+from rich.live import Live
 
 logger = getLogger(__name__)
 
@@ -66,20 +68,30 @@ class QualtricsQuestionDebriefing(QualtricsQuestion):
         self.question = question
         self.response = response
 
-    def prompt(self, console) -> str:
+    def prompt(self, console, delay=0.05) -> str:
         self.survey.populate_system_message(
-            question=self.question, response=self.response
+            question=self.question,
+            response=self.response,
+            end_of_survey_token=self.end_of_survey_token,
         )
+        console.rule(":robot_face:")
         chat_history = [(None, self.survey.initial_message)]
-        while True:
-            last_message = chat_history[-1][1]
-            console.print(last_message, style="bold cyan")
+        console.print("[green]" + self.survey.initial_message + "[/green]")
+        done = False
+        while not done:
             user_input = Prompt.ask("", console=console)
-            completion = self.survey.chat(user_input, chat_history)
+            with Live(console=console) as live:
+                completion = ""
+                for x in self.survey.chat(user_input, chat_history):
+                    if x is not None:
+                        completion += x
+                        time.sleep(delay)
+                    if self.end_of_survey_token in completion:
+                        done = True
+                        completion = completion.replace(self.end_of_survey_token, "")
+                    live.update("[green]" + completion + "[/green]")
             chat_history.append((user_input, completion))
-
-            if self.end_of_survey_token in completion:
-                break
+        console.rule(":robot_face:")
 
         # TODO: Create a better transcript
         transcript = "\n\n".join(

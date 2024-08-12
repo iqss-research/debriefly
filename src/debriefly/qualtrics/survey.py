@@ -38,9 +38,11 @@ class QualtricsSurvey(QualtricsRequest):
     def debriefing_question(self):
         return self.get_debriefing_question()
 
-    def get_debriefing_question_qualtrics(
-        self, embedded_data_name="debriefly"
-    ) -> [str, None]:
+    @cached_property
+    def last_question(self):
+        return self.get_last_question_qualtrics()
+
+    def get_debriefing_question_qualtrics(self, embedded_data_name="debriefly"):
         embedded_data_names = [e["name"] for e in self.data.get("embeddedData", [])]
         if embedded_data_name in embedded_data_names:
             embedded_data_index = embedded_data_names.index(embedded_data_name)
@@ -77,6 +79,26 @@ class QualtricsSurvey(QualtricsRequest):
                         logger.error(f"{target_question_id} not found")
         else:
             logger.info("No embedded data found.")
+
+    def get_last_question_qualtrics(self):
+        target_question_id = None
+        flow = self.data.get("flow", [])
+        for block in flow:
+            if block["type"] == "Block":
+                target_block = block["id"]
+                target_block_elements = self.data["blocks"][target_block]["elements"]
+                target_questions = [
+                    e for e in target_block_elements if e["type"] == "Question"
+                ]
+                if target_questions:
+                    target_question_id = target_questions[-1]["questionId"]
+
+        if target_question_id is None:
+            logger.error("No last question detected")
+            return None
+
+        logger.info("Last question detected as {target_question_id}")
+        return self.questions[target_question_id]
 
     def get_debriefing_question_openai(self, model="gpt-4o-mini", template_name="meta"):
 
@@ -140,11 +162,12 @@ class QualtricsSurvey(QualtricsRequest):
             messages.append({"role": "assistant", "content": assistant_response})
         messages.append({"role": "user", "content": user_input})
 
-        completion = client.chat.completions.create(
+        response = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=1.0,
-            stream=False,
+            stream=True,
         )
 
-        return completion.choices[0].message.content
+        for chunk in response:
+            yield chunk.choices[0].delta.content
