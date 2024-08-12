@@ -23,9 +23,13 @@ dependencies = [
     "openai",
     "python-dotenv",
     "requests",
-    "requests_oauth2client"
+    "requests_oauth2client",
+    "rich"
 ]
 dynamic = ["version"]
+
+[project.scripts]
+debriefly = "debriefly.__main__:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

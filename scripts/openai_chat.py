@@ -12,7 +12,10 @@ client = OpenAI(
 completion = client.chat.completions.create(
     model="gpt-4o-mini",
     messages=[
-        {"role": "system", "content": "You answer all questions in two words"},
+        {
+            "role": "system",
+            "content": "You answer all questions in two words to save me money.",
+        },
         {
             "role": "assistant",
             "content": "Please ask me a question and I will reply in two words.",

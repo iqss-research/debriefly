@@ -4,6 +4,15 @@ import debriefly
 from debriefly.configuration import Config
 
 
+# The _version.py file is managed by setuptools-scm
+#   and is not in version control.
+try:
+    from debriefly._version import version as __version__  # type: ignore
+except ModuleNotFoundError:
+    # We're likely running as a source package without installation
+    __version__ = "src"
+
+
 logging.config.dictConfig(
     {
         "version": 1,
@@ -21,7 +30,7 @@ logging.config.dictConfig(
                 "stream": "ext://sys.stdout",
             }
         },
-        "loggers": {"": {"handlers": ["default"], "level": "NOTSET"}},
+        "loggers": {"": {"handlers": ["default"], "level": "ERROR"}},
     }
 )
 
