@@ -21,11 +21,14 @@ class QualtricsSurveySession(QualtricsRequest):
     def __str__(self):
         return f"Session {self.session_id} for survey {self.survey.survey_id}"
 
-    def submit(self, answers={}, embedded_data=None):
-        json = {"responses": answers}
+    def submit(self, answers=None, embedded_data=None):
+        # If no answers are provided (just embedded_data),
+        # or if we're done, we don't advance the survey.
+        json = {"advance": answers is not None and not self.done}
+        answers = answers or {}
+        json["responses"] = answers
         if embedded_data is not None:
             json["embeddedData"] = {"debriefly": str(embedded_data)}
-        json["advance"] = not self.done
 
         self.make_request(url=self.session_id, json=json)
         if not self.done:
@@ -34,9 +37,7 @@ class QualtricsSurveySession(QualtricsRequest):
         debriefing_q = self.survey.debriefing_question
         if debriefing_q is not None and debriefing_q.question.question_id in answers:
             logger.info(f"Debriefing Question: {debriefing_q} found in answers.")
-            self.survey.debriefing_question.response = answers[
-                debriefing_q.question.question_id
-            ]
+            debriefing_q.response = answers[debriefing_q.question.question_id]
             return debriefing_q
 
     def process(self):
