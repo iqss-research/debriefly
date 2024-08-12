@@ -17,4 +17,4 @@ jobs:
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push https://vineetbansal:$HF_TOKEN@huggingface.co/spaces/vineetbansal/debriefly main
+        run: git push https://vineetbansal:$HF_TOKEN@huggingface.co/spaces/vineetbansal/debriefly main --force
