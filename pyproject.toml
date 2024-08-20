@@ -27,7 +27,7 @@ dependencies = [
     "reflex",
     "reflex-clerk",
     "authlib",
-    "psycopg2",
+    "psycopg2-binary",
     "pyyaml"
 ]
 dynamic = ["version"]
