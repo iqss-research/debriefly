@@ -6,7 +6,7 @@
 ## Installation
 
 ```bash
-pip install -e debriefly[dev]
+pip install -e ".[dev]"
 ```
 
 ## Setup
