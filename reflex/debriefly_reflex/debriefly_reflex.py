@@ -7,6 +7,8 @@ from .views.chat import chat_gen_ui
 from .views.table import main_table
 from .backend.backend import State
 
+from debriefly import __version__
+
 
 load_dotenv()
 
@@ -22,6 +24,13 @@ def index() -> rx.Component:
                     spacing="6",
                     width="100%",
                     flex_direction=["column", "column", "column", "row"],
+                ),
+                rx.el.footer(
+                    rx.hstack(
+                        rx.text(f"debriefly {__version__}", width="100%"),
+                        text_align="center",
+                    ),
+                    width="100%",
                 ),
                 height="100vh",
                 bg=rx.color("accent", 1),

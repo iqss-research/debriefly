@@ -116,6 +116,31 @@ def _show_question(question: Question):
                     on_click=State.analyze(question),
                     disabled=State.gen_response,
                 ),
+                rx.alert_dialog.root(
+                    rx.alert_dialog.trigger(
+                        rx.icon_button(
+                            rx.icon("file-plus-2", size=22),
+                            size="2",
+                            color_scheme="green",
+                        ),
+                    ),
+                    rx.alert_dialog.content(
+                        rx.alert_dialog.title("Generate Survey"),
+                        rx.alert_dialog.description(
+                            "This will create a new Qualtrics survey with this question. Are you sure?",
+                        ),
+                        rx.flex(
+                            rx.alert_dialog.cancel(
+                                rx.button("Cancel"),
+                            ),
+                            rx.alert_dialog.action(
+                                rx.button("Create"),
+                                on_click=State.create_qualtrics_survey(question),
+                            ),
+                            spacing="3",
+                        ),
+                    ),
+                ),
                 _update_question_dialog(question),
                 rx.icon_button(
                     rx.icon("trash-2", size=22),

@@ -1,10 +1,9 @@
 import os
 import openai
-
 import reflex as rx
 from sqlmodel import select, asc, desc, or_, func
-
 from .models import Question
+from debriefly.qualtrics import QualtricsSession, QualtricsSurveyCreator
 
 _client = None
 
@@ -147,3 +146,12 @@ class State(rx.State):
         self.gen_response = True
         self.chat_content_data = ""
         return State.call_openai
+
+    def create_qualtrics_survey(self, question: Question):
+        with QualtricsSession():
+            _ = QualtricsSurveyCreator().create_survey(
+                name="auto00", question_text=question["question_text"]
+            )
+            # TypeError: Your handler State.create_qualtrics_survey must only return/yield:
+            # None, Events or other EventHandlers referenced by their class (not using `self`)
+            # return survey.survey_id
