@@ -24,23 +24,43 @@ class QualtricsRequest:
 
         self.data_center = data_center
         self.api_token = api_token or os.getenv("Q_API_TOKEN")
-        self.url = f"https://{data_center}.qualtrics.com/API/v3/{self.endpoint}"
+        self.base_url = f"https://{data_center}.qualtrics.com/API/v3"
+        self.url = self.base_url + "/" + self.endpoint
 
         if data is None:
             self.make_request(method=self.method)
         else:
             self.data = data
 
-    def make_request(self, url="", json={}, method="post", raise_for_status=True):
+    def make_request(
+        self,
+        url="",
+        json={},
+        data=None,
+        files=None,
+        method="post",
+        raise_for_status=True,
+        endpoint_override=False,
+    ):
         if (
             request_fn := {"get": requests.get, "post": requests.post}.get(method)
         ) is None:
             raise NotImplementedError
 
+        url = (self.base_url if endpoint_override else self.url) + "/" + url
+
+        # create a copy so we're not modifying arguments for subsequent calls
+        kwargs = self.default_request_kwargs.copy()
+        # if not json was provided, no need to specify content-type
+        if not json and "Content-Type" in kwargs.get("headers", {}):
+            kwargs["headers"].pop("Content-Type")
+
         response = request_fn(
-            self.url + "/" + url,
+            url,
             json=json,
-            **self.default_request_kwargs,
+            data=data,
+            files=files,
+            **kwargs,
         )
         if raise_for_status:
             response.raise_for_status()

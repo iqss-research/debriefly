@@ -13,6 +13,44 @@ from debriefly.qualtrics.question import (
 logger = logging.getLogger(__name__)
 
 
+class QualtricsSurveyCreator(QualtricsRequest):
+    endpoint = "surveys"
+
+    def create_survey(
+        self, name, survey_file=None, question_text=None, template_name="survey"
+    ):
+        assert any([survey_file, question_text]) and not all(
+            [survey_file, question_text]
+        ), "Exactly one of survey_file or question_text must be provided"
+
+        if question_text is not None:
+            env = Environment(
+                loader=PackageLoader("debriefly.data.templates", package_path=""),
+                autoescape=select_autoescape(),
+            )
+            template = env.get_template(f"{template_name}.jinja")
+            survey_file_str = template.render(question_text=question_text)
+            # Value not really important, but we need a valid filename to upload
+            survey_file = "auto_generated.txt"
+        else:
+            survey_file_str = open(survey_file, "r").read()
+
+        logger.info(f"Creating survey with name {name} and file {survey_file}")
+        files = {
+            "file": (
+                survey_file,
+                survey_file_str,
+                "application/vnd.qualtrics.survey.txt",
+            )
+        }
+
+        self.make_request(data={"name": name}, files=files)
+        survey_id = self.data["id"]
+        logger.info(f"Survey created with id {survey_id}")
+
+        return QualtricsSurvey(survey_id=survey_id)
+
+
 class QualtricsSurvey(QualtricsRequest):
     def __init__(self, survey_id=None, data_center=None, api_token=None, data=None):
         self.survey_id = survey_id
@@ -33,6 +71,9 @@ class QualtricsSurvey(QualtricsRequest):
         # populated on populate_system_message()
         self.system_message = ""
         self.initial_message = ""  # TODO: collapse into system_message?
+
+    def __str__(self):
+        return f"QualtricsSurvey (id={self.survey_id})"
 
     @cached_property
     def debriefing_question(self):

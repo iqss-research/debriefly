@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 
 import debriefly
-from debriefly.commands import run
+from debriefly.commands import create, run
 
 logger = logging.getLogger("debriefly")
 
@@ -15,7 +15,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", action="version", version=debriefly.__version__)
 
-    modules = (run,)
+    modules = (
+        create,
+        run,
+    )
 
     subparsers = parser.add_subparsers(title="Choose a command")
     subparsers.required = True
