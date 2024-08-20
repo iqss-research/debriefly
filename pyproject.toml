@@ -18,13 +18,17 @@ classifiers = [
 
 dependencies = [
     "fastapi",
-    "gradio",
     "jinja2",
     "openai",
     "python-dotenv",
     "requests",
     "requests_oauth2client",
-    "rich"
+    "rich",
+    "reflex",
+    "reflex-clerk",
+    "authlib",
+    "psycopg2",
+    "pyyaml"
 ]
 dynamic = ["version"]
 
