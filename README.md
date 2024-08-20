@@ -38,7 +38,9 @@ Your browser address bar will typically look like `https:/...qualtrics.com/surve
 when editing a survey. The `SV_8ADyCPrFttPUPJA` part is the `Survey ID`.
 
 ```bash
-debriefly run --name Hello --question_text "How is it going?"
+debriefly run --survey_id SV_8ADyCPrFttPUPJA
 ```
 
-This creates a new survey with the name `Hello` and a single question with the text `How is it going?`.
+This starts the survey in the terminal where you can respond to individual questions. The survey need not have been created
+using `debriefly create`, and can be a pre-existing survey. *Note that only text questions and single-answer multiple-choice questions
+are supported at the moment, and having any other type of questions in your survey will not work.*
