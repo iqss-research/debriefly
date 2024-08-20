@@ -57,3 +57,10 @@ dev = [
     "sphinx_rtd_theme",
     "twine"
 ]
+
+reflex = [
+    "reflex",
+    "reflex-clerk",
+    "authlib",
+    "psycopg2"
+]
