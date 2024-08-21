@@ -16,10 +16,13 @@ def add_args(parser):
 
 
 def run(survey_id):
-    openai_client = OpenAI(
-        organization=os.environ["OPENAI_ORG_ID"],
-        project=os.environ["OPENAI_PROJECT_ID"],
-    )
+    if os.getenv("OPENAI_API_KEY") is not None:
+        openai_client = OpenAI(
+            organization=os.getenv("OPENAI_ORG_ID"),
+            project=os.getenv("OPENAI_PROJECT_ID"),
+        )
+    else:
+        openai_client = None
 
     with QualtricsSession(openai_client=openai_client):
         survey = QualtricsSurvey(survey_id=survey_id)

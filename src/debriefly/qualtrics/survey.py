@@ -138,7 +138,7 @@ class QualtricsSurvey(QualtricsRequest):
             logger.error("No last question detected")
             return None
 
-        logger.info("Last question detected as {target_question_id}")
+        logger.info(f"Last question detected as {target_question_id}")
         return self.questions[target_question_id]
 
     def get_debriefing_question_openai(self, model="gpt-4o-mini", template_name="meta"):
