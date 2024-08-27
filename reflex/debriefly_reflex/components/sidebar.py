@@ -26,17 +26,8 @@ def clerk_navbar() -> rx.Component:
 
 
 def sidebar_header() -> rx.Component:
-    """Sidebar header.
-
-    Returns:
-        The sidebar header component.
-    """
     return rx.hstack(
-        # The logo.
-        rx.color_mode_cond(
-            rx.image(src="/reflex_black.svg", height="1.5em"),
-            rx.image(src="/reflex_white.svg", height="1.5em"),
-        ),
+        rx.heading("Debriefly", size="12", weight="bold"),
         rx.spacer(),
         align="center",
         width="100%",
@@ -155,6 +146,7 @@ def sidebar() -> rx.Component:
                 width="100%",
             ),
             rx.spacer(),
+            rx.divider(),
             sidebar_footer(),
             justify="end",
             align="end",

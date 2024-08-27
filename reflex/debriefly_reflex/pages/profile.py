@@ -2,11 +2,24 @@ from ..templates import template
 from ..components.profile_input import profile_input
 from ..backend.backend import State
 import reflex as rx
+import reflex_clerk as clerk
 
 
 @template(route="/profile", title="Profile")
 def profile() -> rx.Component:
     return rx.vstack(
+        clerk.protect(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon("shield-check"),
+                    rx.heading("Access Level", size="5"),
+                    align="center",
+                ),
+                rx.text("You have admin access to debriefly.", size="3"),
+                width="100%",
+            ),
+            role="org:admin",
+        ),
         rx.flex(
             rx.vstack(
                 rx.hstack(
