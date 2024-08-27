@@ -17,7 +17,14 @@ class QualtricsSurveyCreator(QualtricsRequest):
     endpoint = "surveys"
 
     def create_survey(
-        self, name, survey_file=None, question_text=None, template_name="survey"
+        self,
+        name,
+        survey_file=None,
+        question_text=None,
+        template_name="survey",
+        create_version=False,
+        version_description="",
+        publish=True,
     ):
         assert any([survey_file, question_text]) and not all(
             [survey_file, question_text]
@@ -35,7 +42,7 @@ class QualtricsSurveyCreator(QualtricsRequest):
         else:
             survey_file_str = open(survey_file, "r").read()
 
-        logger.info(f"Creating survey with name {name} and file {survey_file}")
+        logger.debug(f"Creating survey with name {name} and file {survey_file}")
         files = {
             "file": (
                 survey_file,
@@ -46,17 +53,30 @@ class QualtricsSurveyCreator(QualtricsRequest):
 
         self.make_request(data={"name": name}, files=files)
         survey_id = self.data["id"]
-        logger.info(f"Survey created with id {survey_id}")
+        logger.debug(f"Survey created with id {survey_id}")
 
-        return QualtricsSurvey(survey_id=survey_id)
+        survey = QualtricsSurvey(survey_id=survey_id)
+        self.survey = survey
+        self.make_active()
+
+        return survey
+
+    def make_active(self):
+        logger.debug(f"Making survey {self.survey.survey_id} active")
+        self.make_request(
+            method="put",
+            url=f"surveys/{self.survey.survey_id}",
+            json={"isActive": True},
+            endpoint_override=True,
+        )
 
 
 class QualtricsSurvey(QualtricsRequest):
-    def __init__(self, survey_id=None, data_center=None, api_token=None, data=None):
+    def __init__(self, survey_id=None, data=None):
         self.survey_id = survey_id
         self.endpoint = f"surveys/{self.survey_id}"
 
-        super().__init__(data_center, api_token, data)
+        super().__init__(data)
 
         self.questions: Dict[str, QualtricsQuestion] = {
             k: QualtricsQuestionFactory(
@@ -100,17 +120,19 @@ class QualtricsSurvey(QualtricsRequest):
                         break
 
             if target_block is None:
-                logger.info("No block preceding embedded data found.")
+                logger.debug("No block preceding embedded data found.")
             else:
-                logger.info(f"Embedded data at index {embedded_i}")
-                logger.info(f"Target block = {target_block}")
+                logger.debug(f"Embedded data at index {embedded_i}")
+                logger.debug(f"Target block = {target_block}")
                 target_block_elements = self.data["blocks"][target_block]["elements"]
                 target_questions = [
                     e for e in target_block_elements if e["type"] == "Question"
                 ]
                 if target_questions:
                     target_question_id = target_questions[-1]["questionId"]
-                    logger.info(f"Debriefing question detected as {target_question_id}")
+                    logger.debug(
+                        f"Debriefing question detected as {target_question_id}"
+                    )
                     if target_question_id in self.questions:
                         _question = self.questions[target_question_id]
                         return QualtricsQuestionDebriefing(
@@ -119,7 +141,7 @@ class QualtricsSurvey(QualtricsRequest):
                     else:
                         logger.error(f"{target_question_id} not found")
         else:
-            logger.info("No embedded data found.")
+            logger.debug("No embedded data found.")
 
     def get_last_question_qualtrics(self):
         target_question_id = None
@@ -138,14 +160,14 @@ class QualtricsSurvey(QualtricsRequest):
             logger.error("No last question detected")
             return None
 
-        logger.info(f"Last question detected as {target_question_id}")
+        logger.debug(f"Last question detected as {target_question_id}")
         return self.questions[target_question_id]
 
     def get_debriefing_question_openai(self, model="gpt-4o-mini", template_name="meta"):
 
-        logger.info("Determining debriefing question")
+        logger.debug("Determining debriefing question")
         if self.openai_client is None:
-            logger.info(
+            logger.debug(
                 "No OpenAI client provided; Skipping debriefing question selection."
             )
             return None
@@ -168,7 +190,7 @@ class QualtricsSurvey(QualtricsRequest):
         if selected_question_id not in self.questions:
             logger.error(f"Unexpected {selected_question_id=}")
         else:
-            logger.info(f"Debriefing question id from OpenAI = {selected_question_id}")
+            logger.debug(f"Debriefing question id from OpenAI = {selected_question_id}")
             _question = self.questions[selected_question_id]
             return QualtricsQuestionDebriefing(
                 survey=self, question=_question, response=None
@@ -177,12 +199,12 @@ class QualtricsSurvey(QualtricsRequest):
     def get_debriefing_question(self):
         debriefing_question = self.get_debriefing_question_qualtrics()
         if debriefing_question is None:
-            logger.info("No debriefing question found in Qualtrics")
+            logger.debug("No debriefing question found in Qualtrics")
             debriefing_question = self.get_debriefing_question_openai()
         return debriefing_question
 
     def populate_system_message(self, **kwargs):
-        logger.info("Determining debriefing question")
+        logger.debug("Determining debriefing question")
 
         env = Environment(
             loader=PackageLoader("debriefly.data.templates", package_path=""),

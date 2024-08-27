@@ -1,6 +1,5 @@
 from json import loads
 import logging
-import os
 import requests
 
 logger = logging.getLogger(__name__)
@@ -8,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 class QualtricsRequest:
     # Set by an enclosing QualtricsSession context-manager
+    data_center = ""
     default_request_kwargs = {}
     openai_client = None
 
@@ -19,12 +19,8 @@ class QualtricsRequest:
     def from_data(cls, data):
         return cls(data=data)
 
-    def __init__(self, data_center=None, api_token=None, data=None):
-        data_center = data_center or os.getenv("Q_DATA_CENTER")
-
-        self.data_center = data_center
-        self.api_token = api_token or os.getenv("Q_API_TOKEN")
-        self.base_url = f"https://{data_center}.qualtrics.com/API/v3"
+    def __init__(self, data=None):
+        self.base_url = f"https://{self.data_center}.qualtrics.com/API/v3"
         self.url = self.base_url + "/" + self.endpoint
 
         if data is None:
@@ -43,7 +39,11 @@ class QualtricsRequest:
         endpoint_override=False,
     ):
         if (
-            request_fn := {"get": requests.get, "post": requests.post}.get(method)
+            request_fn := {
+                "get": requests.get,
+                "post": requests.post,
+                "put": requests.put,
+            }.get(method)
         ) is None:
             raise NotImplementedError
 
@@ -71,4 +71,8 @@ class QualtricsRequest:
         )
         logger.debug(f"{method} response: {response}")
 
-        self.data = response["result"]
+        # put requests have a 'meta' key, others have 'result'
+        if method == "put":
+            self.data = response["meta"]
+        else:
+            self.data = response["result"]

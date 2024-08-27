@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 class QualtricsSurveySession(QualtricsRequest):
-    def __init__(self, survey, data_center=None, api_token=None, data=None):
+    def __init__(self, survey, data=None):
         self.method = "post"
         self.endpoint = f"surveys/{survey.survey_id}/sessions"
 
-        super().__init__(data_center, api_token, data)
+        super().__init__(data)
 
         self.session_id = self.data["sessionId"]
         self.survey = survey
@@ -36,7 +36,7 @@ class QualtricsSurveySession(QualtricsRequest):
 
         debriefing_q = self.survey.debriefing_question
         if debriefing_q is not None and debriefing_q.question.question_id in answers:
-            logger.info(f"Debriefing Question: {debriefing_q} found in answers.")
+            logger.debug(f"Debriefing Question: {debriefing_q} found in answers.")
             debriefing_q.response = answers[debriefing_q.question.question_id]
             return debriefing_q
 

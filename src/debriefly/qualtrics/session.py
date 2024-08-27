@@ -47,10 +47,12 @@ class QualtricsSession:
             kwargs["headers"]["x-api-token"] = self.api_token
         if self.auth:
             kwargs["auth"] = self.auth
+        QualtricsRequest.data_center = self.data_center
         QualtricsRequest.default_request_kwargs = kwargs
         QualtricsRequest.openai_client = self.openai_client
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        QualtricsRequest.data_center = ""
         QualtricsRequest.default_request_kwargs = {}
         QualtricsRequest.openai_client = None

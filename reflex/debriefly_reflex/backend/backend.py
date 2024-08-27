@@ -2,10 +2,15 @@ import os
 import openai
 import reflex as rx
 from sqlmodel import select, asc, desc, or_, func
-from .models import Question
+import logging
+import reflex_clerk as clerk
+from .models import Question, Profile
 from debriefly.qualtrics import QualtricsSession, QualtricsSurveyCreator
 
 _client = None
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_openai_client():
@@ -15,7 +20,7 @@ def get_openai_client():
     return _client
 
 
-class State(rx.State):
+class State(clerk.ClerkState):
     """The app state."""
 
     current_question: Question = Question()
@@ -23,14 +28,15 @@ class State(rx.State):
     search_value: str = ""
     sort_value: str = ""
     sort_reverse: bool = False
-    tone: str = "😊 Formal"
     length: str = "300"
     chat_content_data: str = "Click 'Analyze' to generate OpenAI's view on a question."
     gen_response = False
 
+    profile = Profile()
+
     def load_entries(self) -> list[Question]:
         with rx.session() as session:
-            query = select(Question)
+            query = select(Question).where(Question.user_id == self.user_id)
             if self.search_value:
                 search_value = f"%{str(self.search_value).lower()}%"
                 query = query.where(
@@ -57,6 +63,12 @@ class State(rx.State):
 
             self.questions = session.exec(query).all()
 
+    def load_profile(self):
+        with rx.session() as session:
+            self.profile = session.exec(
+                select(Profile).where(Profile.user_id == self.user_id)
+            ).first() or Profile(user_id=self.user_id)
+
     def sort_values(self, sort_value: str):
         self.sort_value = sort_value
         self.load_entries()
@@ -76,7 +88,8 @@ class State(rx.State):
         self.current_question = form_data
 
         with rx.session() as session:
-            session.add(Question(**self.current_question))
+            question = Question(user_id=self.user_id, **self.current_question)
+            session.add(question)
             session.commit()
         self.load_entries()
         return rx.toast.info(
@@ -113,6 +126,16 @@ class State(rx.State):
             position="bottom-right",
         )
 
+    def update_profile(self, form_data: dict):
+        for field in Profile.get_fields():
+            if field != "id" and field in form_data:
+                setattr(self.profile, field, form_data[field])
+        with rx.session() as session:
+            session.add(self.profile)
+            session.commit()
+            self.load_profile()
+        return rx.toast.success("Profile updated successfully", position="top-center")
+
     @rx.background
     async def call_openai(self):
         session = get_openai_client().chat.completions.create(
@@ -148,9 +171,18 @@ class State(rx.State):
         return State.call_openai
 
     def create_qualtrics_survey(self, question: Question):
-        with QualtricsSession():
-            _ = QualtricsSurveyCreator().create_survey(
+        with QualtricsSession(
+            data_center=self.profile.qualtrics_data_center,
+            api_token=self.profile.qualtrics_api_token,
+            client_id=self.profile.qualtrics_client_id,
+            client_secret=self.profile.qualtrics_client_secret,
+        ):
+            survey = QualtricsSurveyCreator().create_survey(
                 name="auto00", question_text=question["question_text"]
+            )
+
+            return rx.toast.success(
+                f"Survey {survey.survey_id} created", position="top-center"
             )
             # TypeError: Your handler State.create_qualtrics_survey must only return/yield:
             # None, Events or other EventHandlers referenced by their class (not using `self`)

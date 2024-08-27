@@ -7,6 +7,6 @@ if __name__ == "__main__":
 
     with QualtricsSession():
         survey = QualtricsSurveyCreator().create_survey(
-            name="Hello", question_text="How're you feeling today?"
+            name="Hello7", question_text="How're you feeling today?"
         )
-        print(survey.id)
+        print(survey.survey_id)

@@ -30,7 +30,7 @@ logging.config.dictConfig(
                 "stream": "ext://sys.stdout",
             }
         },
-        "loggers": {"": {"handlers": ["default"], "level": "ERROR"}},
+        "loggers": {"": {"handlers": ["default"], "level": "INFO"}},
     }
 )
 

@@ -16,7 +16,11 @@ if __name__ == "__main__":
         project=os.environ["OPENAI_PROJECT_ID"],
     )
 
-    with QualtricsSession(openai_client=openai_client):
+    with QualtricsSession(
+        api_token="j0y0qnneD2uf1P4XAZLPql0WIXGn0LAhIr4WMO6a",
+        data_center="sjc1",
+        openai_client=openai_client,
+    ):
         survey = QualtricsSurvey(survey_id="SV_8ADyHCnFttPUPJA")
         survey_session = QualtricsSurveySession(survey=survey)
 

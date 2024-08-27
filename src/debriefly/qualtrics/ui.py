@@ -23,7 +23,7 @@ class QualtricsSurveySessionUI:
 
                     boxes = []
                     if launch_debriefing:
-                        logger.info("Launching Debriefing.")
+                        logger.debug("Launching Debriefing.")
                         question, response = launch_debriefing.popitem()
                         self.survey.populate_system_message(
                             question=question, response=response
@@ -101,7 +101,7 @@ class QualtricsSurveySessionUI:
                                 ]
                             )
 
-                            logger.info("Debriefing completed.")
+                            logger.debug("Debriefing completed.")
                             _ = self.submit(embedded_data=transcript)
                         else:
                             if page_number == 0:

@@ -249,40 +249,55 @@ def _update_question_dialog(question):
 
 def main_table():
     return rx.fragment(
-        rx.flex(
-            _add_question_button(),
-            rx.spacer(),
-            rx.cond(
-                State.sort_reverse,
-                rx.icon(
-                    "arrow-down-z-a",
-                    size=28,
-                    stroke_width=1.5,
-                    cursor="pointer",
-                    on_click=State.toggle_sort,
+        rx.vstack(
+            rx.hstack(
+                _add_question_button(),
+                rx.spacer(),
+                rx.cond(
+                    State.sort_reverse,
+                    rx.icon(
+                        "arrow-down-z-a",
+                        size=28,
+                        stroke_width=1.5,
+                        cursor="pointer",
+                        on_click=State.toggle_sort,
+                    ),
+                    rx.icon(
+                        "arrow-down-a-z",
+                        size=28,
+                        stroke_width=1.5,
+                        cursor="pointer",
+                        on_click=State.toggle_sort,
+                    ),
                 ),
-                rx.icon(
-                    "arrow-down-a-z",
-                    size=28,
-                    stroke_width=1.5,
-                    cursor="pointer",
-                    on_click=State.toggle_sort,
+                rx.select(
+                    ["id", "question_text"],
+                    placeholder="Sort By: ID",
+                    size="3",
+                    on_change=lambda sort_value: State.sort_values(sort_value),
+                ),
+                rx.input(
+                    rx.input.slot(rx.icon("search")),
+                    placeholder="Search here...",
+                    size="3",
+                    max_width="225px",
+                    width="100%",
+                    variant="surface",
+                    on_change=lambda value: State.filter_values(value),
                 ),
             ),
-            rx.select(
-                ["id", "question_text"],
-                placeholder="Sort By: ID",
-                size="3",
-                on_change=lambda sort_value: State.sort_values(sort_value),
-            ),
-            rx.input(
-                rx.input.slot(rx.icon("search")),
-                placeholder="Search here...",
-                size="3",
-                max_width="225px",
-                width="100%",
+            rx.table.root(
+                rx.table.header(
+                    rx.table.row(
+                        _header_cell("ID", "square-user-round"),
+                        _header_cell("Question", "mail"),
+                        _header_cell("Actions", "cog"),
+                    ),
+                ),
+                rx.table.body(rx.foreach(State.questions, _show_question)),
                 variant="surface",
-                on_change=lambda value: State.filter_values(value),
+                size="3",
+                width="100%",
             ),
             justify="end",
             align="center",
@@ -290,18 +305,5 @@ def main_table():
             wrap="wrap",
             width="100%",
             padding_bottom="1em",
-        ),
-        rx.table.root(
-            rx.table.header(
-                rx.table.row(
-                    _header_cell("ID", "square-user-round"),
-                    _header_cell("Question", "mail"),
-                    _header_cell("Actions", "cog"),
-                ),
-            ),
-            rx.table.body(rx.foreach(State.questions, _show_question)),
-            variant="surface",
-            size="3",
-            width="100%",
         ),
     )

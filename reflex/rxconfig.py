@@ -1,3 +1,5 @@
 import reflex as rx
 
-config = rx.Config(app_name="debriefly_reflex")
+config = rx.Config(
+    app_name="debriefly_reflex",
+)
