@@ -34,12 +34,6 @@ class QualtricsSurveySession(QualtricsRequest):
         if not self.done:
             self.process()
 
-        debriefing_q = self.survey.debriefing_question
-        if debriefing_q is not None and debriefing_q.question.question_id in answers:
-            logger.debug(f"Debriefing Question: {debriefing_q} found in answers.")
-            debriefing_q.response = answers[debriefing_q.question.question_id]
-            return debriefing_q
-
     def process(self):
         self.questions = {}
         for q in self.data["questions"]:
@@ -56,8 +50,8 @@ class QualtricsSurveySession(QualtricsRequest):
             self.questions[question.question_id] = question
         self.done = self.data["done"]
 
-    def run(self, debrief="last"):
-        assert debrief in (None, "immediate", "last")
+    def run(self):
+        _ = self.survey.debriefing_question  # access to populate
 
         console = Console()
         console.rule(f"Survey {self.survey.survey_id}")
@@ -67,17 +61,23 @@ class QualtricsSurveySession(QualtricsRequest):
                 answer = question.prompt(console)
                 answers |= answer
 
+                debriefing_q = self.survey.debriefing_question
                 if (
-                    debrief == "last"
-                    and self.survey.last_question.question_id in self.questions
+                    debriefing_q is not None
+                    and debriefing_q.question.question_id in answers
                 ):
+                    logger.debug(
+                        f"Debriefing Question: {debriefing_q} found in answers. Saving response."
+                    )
+                    debriefing_q.response = answers[debriefing_q.question.question_id]
+
+                if self.survey.last_question.question_id in self.questions:
                     if debriefing_q := self.survey.debriefing_question:
+                        logger.debug("Starting debriefing")
                         transcript = debriefing_q.prompt(console)
                         self.submit(answers, embedded_data=transcript)
 
             if not self.done:
-                if (debriefing_q := self.submit(answers)) and debrief == "immediate":
-                    transcript = debriefing_q.prompt(console)
-                    self.submit(embedded_data=transcript)
+                self.submit(answers)
 
         console.print(self.done)
