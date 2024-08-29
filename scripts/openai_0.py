@@ -20,8 +20,8 @@ completion = client.chat.completions.create(
             "role": "assistant",
             "content": "Please ask me a question and I will reply in two words.",
         },
-        {"role": "user", "content": "What is the capital of France?"},
+        {"role": "user", "content": "What is the meaning of life?"},
     ],
 )
 
-print(completion.choices[0].message)
+print(completion.choices[0].message.content)

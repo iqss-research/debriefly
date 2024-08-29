@@ -17,14 +17,7 @@ class QualtricsSurveyCreator(QualtricsRequest):
     endpoint = "surveys"
 
     def create_survey(
-        self,
-        name,
-        survey_file=None,
-        question_text=None,
-        template_name="survey",
-        create_version=False,
-        version_description="",
-        publish=True,
+        self, name, survey_file=None, question_text=None, template_name="survey"
     ):
         assert any([survey_file, question_text]) and not all(
             [survey_file, question_text]
@@ -179,7 +172,7 @@ class QualtricsSurvey(QualtricsRequest):
         template = env.get_template(f"{template_name}.jinja")
         template_str = template.render(questions=self.questions.values())
 
-        completion = self.openai_client.chat.completions.create(
+        completion = self.openai_client.client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "user", "content": template_str},
@@ -215,22 +208,3 @@ class QualtricsSurvey(QualtricsRequest):
         self.initial_message = env.get_template("initial_message.jinja").render(
             **kwargs
         )
-
-    def chat(self, user_input, chat_history, model="gpt-4o-mini"):
-        client = self.openai_client
-        messages = [{"role": "system", "content": self.system_message}]
-        for human_input, assistant_response in chat_history:
-            if human_input is not None:
-                messages.append({"role": "user", "content": human_input})
-            messages.append({"role": "assistant", "content": assistant_response})
-        messages.append({"role": "user", "content": user_input})
-
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=1.0,
-            stream=True,
-        )
-
-        for chunk in response:
-            yield chunk.choices[0].delta.content

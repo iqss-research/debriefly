@@ -1,7 +1,7 @@
-import time
 from logging import getLogger
 from rich.prompt import Prompt
-from rich.live import Live
+from debriefly.openai import get_client
+
 
 logger = getLogger(__name__)
 
@@ -74,28 +74,13 @@ class QualtricsQuestionDebriefing(QualtricsQuestion):
             response=self.response,
             end_of_survey_token=self.end_of_survey_token,
         )
-        console.rule(":robot_face:")
-        chat_history = [(None, self.survey.initial_message)]
-        console.print("[green]" + self.survey.initial_message + "[/green]")
-        done = False
-        while not done:
-            user_input = Prompt.ask("", console=console)
-            with Live(console=console) as live:
-                completion = ""
-                for x in self.survey.chat(user_input, chat_history):
-                    if x is not None:
-                        completion += x
-                        time.sleep(delay)
-                    if self.end_of_survey_token in completion:
-                        done = True
-                        completion = completion.replace(self.end_of_survey_token, "")
-                    live.update("[green]" + completion + "[/green]")
-            chat_history.append((user_input, completion))
-        console.rule(":robot_face:")
 
-        # TODO: Create a better transcript
-        transcript = "\n\n".join(
-            ["\n".join([str(x[0]), str(x[1])]) for x in chat_history]
+        client = get_client(
+            missing_ok=False,
+            initial_message=self.survey.initial_message,
+            system_message=self.survey.system_message,
+            end_token=self.end_of_survey_token,
         )
+        transcript = client.interactive_chat()
 
         return transcript
