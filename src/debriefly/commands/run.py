@@ -1,11 +1,11 @@
-import os
-from openai import OpenAI
+import logging
 from debriefly.qualtrics import (
     QualtricsSession,
     QualtricsSurvey,
     QualtricsSurveySession,
 )
-import logging
+from debriefly.openai import get_client
+
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +16,7 @@ def add_args(parser):
 
 
 def run(survey_id):
-    if os.getenv("OPENAI_API_KEY") is not None:
-        openai_client = OpenAI(
-            organization=os.getenv("OPENAI_ORG_ID"),
-            project=os.getenv("OPENAI_PROJECT_ID"),
-        )
-    else:
-        openai_client = None
+    openai_client = get_client()
 
     with QualtricsSession(openai_client=openai_client):
         survey = QualtricsSurvey(survey_id=survey_id)

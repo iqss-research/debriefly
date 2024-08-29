@@ -1,23 +1,13 @@
-import os
-import openai
 import reflex as rx
 from sqlmodel import select, asc, desc, or_, func
 import logging
 import reflex_clerk as clerk
 from .models import Question, Profile
 from debriefly.qualtrics import QualtricsSession, QualtricsSurveyCreator
-
-_client = None
+from debriefly.openai import get_client
 
 
 logger = logging.getLogger(__name__)
-
-
-def get_openai_client():
-    global _client
-    if _client is None:
-        _client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    return _client
 
 
 class State(clerk.ClerkState):
@@ -130,27 +120,16 @@ class State(clerk.ClerkState):
 
     @rx.background
     async def call_openai(self):
-        session = get_openai_client().chat.completions.create(
-            user=self.router.session.client_token,
-            stream=True,
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"You are a chatbot that answers all question in a maximum of {self.length} characters.",
-                },
-                {
-                    "role": "user",
-                    "content": f"What do you think of the following as a survey question: {self.current_question.question_text}",
-                },
-            ],
+        client = get_client(
+            system_message=f"You are a chatbot that answers all question in a maximum of {self.length} characters."
         )
-        for item in session:
-            if hasattr(item.choices[0].delta, "content"):
-                response_text = item.choices[0].delta.content
-                async with self:
-                    if response_text is not None:
-                        self.chat_content_data += response_text
+        for response_text in client.complete(
+            user_input=f"What do you think of the following as a survey question: {self.current_question.question_text}",
+            chat_history=[],
+        ):
+            async with self:
+                if response_text is not None:
+                    self.chat_content_data += response_text
                 yield
 
         async with self:
