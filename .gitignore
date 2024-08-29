@@ -1,11 +1,15 @@
-.env
-.DS_Store
-*.egg-info
-*.pyc
-.idea
-__pycache__
-.pytest_cache
-/build/
-
 # version file (managed by setuptools-scm)
+*.db
+*.egg-info
+*.py[cod]
+*.pyc
+.DS_Store
+.env
+.idea
+.pytest_cache
+.web
+/build/
+__pycache__
+__pycache__/
+assets/external/
 src/debriefly/_version.py

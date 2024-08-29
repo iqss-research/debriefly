@@ -92,9 +92,7 @@ class State(clerk.ClerkState):
             session.add(question)
             session.commit()
         self.load_entries()
-        return rx.toast.info(
-            "Question has been added.", variant="outline", position="bottom-right"
-        )
+        return rx.toast.info("Question has been added.")
 
     def update_question_to_db(self, form_data: dict):
         self.current_question.update(form_data)
@@ -109,9 +107,7 @@ class State(clerk.ClerkState):
             session.commit()
         self.load_entries()
         return rx.toast.info(
-            f"Question {self.current_question['id']} has been modified.",
-            variant="outline",
-            position="bottom-right",
+            f"Question {self.current_question['id']} has been modified."
         )
 
     def delete_question(self, id: int):
@@ -120,11 +116,7 @@ class State(clerk.ClerkState):
             session.delete(question)
             session.commit()
         self.load_entries()
-        return rx.toast.info(
-            f"Question {question.id} has been deleted.",
-            variant="outline",
-            position="bottom-right",
-        )
+        return rx.toast.info(f"Question {question.id} has been deleted.")
 
     def update_profile(self, form_data: dict):
         for field in Profile.get_fields():
@@ -134,7 +126,7 @@ class State(clerk.ClerkState):
             session.add(self.profile)
             session.commit()
             self.load_profile()
-        return rx.toast.success("Profile updated successfully", position="top-center")
+        return rx.toast.success("Profile updated successfully")
 
     @rx.background
     async def call_openai(self):
