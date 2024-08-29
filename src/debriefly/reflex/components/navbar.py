@@ -1,6 +1,6 @@
 """Navbar component for the app."""
 
-from debriefly_reflex import styles
+from debriefly.reflex import styles
 
 import reflex as rx
 

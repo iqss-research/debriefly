@@ -1,0 +1,12 @@
+fastapi
+jinja2
+openai
+python-dotenv
+requests
+requests_oauth2client
+rich
+reflex
+reflex-clerk
+authlib
+psycopg2-binary
+pyyaml
