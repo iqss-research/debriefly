@@ -55,6 +55,10 @@ class QualtricsRequest:
         if not json and "Content-Type" in kwargs.get("headers", {}):
             kwargs["headers"].pop("Content-Type")
 
+        logger.debug(
+            f"{method} request: {self.url} json={json} kwargs={self.default_request_kwargs}"
+        )
+
         response = request_fn(
             url,
             json=json,
@@ -64,15 +68,17 @@ class QualtricsRequest:
         )
         if raise_for_status:
             response.raise_for_status()
-        response = loads(response.text)
 
-        logger.debug(
-            f"{method} request: {self.url} json={json} kwargs={self.default_request_kwargs}"
-        )
         logger.debug(f"{method} response: {response}")
-
-        # put requests have a 'meta' key, others have 'result'
-        if method == "put":
-            self.data = response["meta"]
+        content_type = response.headers["Content-Type"]
+        logger.debug(f"Content-Type: {content_type}")
+        if content_type == "application/json":
+            response = loads(response.text)
+            # put requests have a 'meta' key, others have 'result'
+            if method == "put":
+                self.data = response["meta"]
+            else:
+                self.data = response["result"]
         else:
-            self.data = response["result"]
+            content = response.content
+            self.data = content

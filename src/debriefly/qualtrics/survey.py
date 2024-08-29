@@ -1,4 +1,5 @@
 import logging
+import time
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Dict
 from functools import cached_property
@@ -157,7 +158,6 @@ class QualtricsSurvey(QualtricsRequest):
         return self.questions[target_question_id]
 
     def get_debriefing_question_openai(self, model="gpt-4o-mini", template_name="meta"):
-
         logger.debug("Determining debriefing question")
         if self.openai_client is None:
             logger.debug(
@@ -197,7 +197,7 @@ class QualtricsSurvey(QualtricsRequest):
         return debriefing_question
 
     def populate_system_message(self, **kwargs):
-        logger.debug("Determining debriefing question")
+        logger.debug("Populating system message for debriefing.")
 
         env = Environment(
             loader=PackageLoader("debriefly.data.templates", package_path=""),
@@ -208,3 +208,42 @@ class QualtricsSurvey(QualtricsRequest):
         self.initial_message = env.get_template("initial_message.jinja").render(
             **kwargs
         )
+
+    def collect_responses(self, output_file):
+        logger.info(f"Collecting responses for {self.survey_id}")
+        self.make_request(
+            method="post",
+            url=f"surveys/{self.survey_id}/export-responses",
+            endpoint_override=True,
+            json={"format": "json"},
+        )
+
+        progress_id = self.data["progressId"]
+        status = self.data["status"]
+        while status == "inProgress":
+            logger.debug(
+                f"Monitoring survey response export: {progress_id=}, {status=}"
+            )
+            logger.info("Waiting..")
+
+            self.make_request(
+                method="get",
+                url=f"surveys/{self.survey_id}/export-responses/{progress_id}",
+                endpoint_override=True,
+            )
+            time.sleep(5)
+            status = self.data["status"]
+
+        logger.info(f"Survey response export status = {status}")
+        file_id = self.data["fileId"]
+        logger.debug(f"Survey response file id = {file_id}")
+
+        self.make_request(
+            method="get",
+            url=f"surveys/{self.survey_id}/export-responses/{file_id}/file",
+            endpoint_override=True,
+        )
+
+        logger.info(f"Writing data to file {output_file}")
+        with open(output_file, "wb") as f:
+            f.write(self.data)
