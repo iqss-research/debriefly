@@ -3,6 +3,7 @@ import time
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Dict
 from functools import cached_property
+import json
 
 from debriefly.qualtrics.request import QualtricsRequest
 from debriefly.qualtrics.question import (
@@ -209,13 +210,13 @@ class QualtricsSurvey(QualtricsRequest):
             **kwargs
         )
 
-    def collect_responses(self, output_file):
+    def collect_responses(self, output_file, compress=True):
         logger.info(f"Collecting responses for {self.survey_id}")
         self.make_request(
             method="post",
             url=f"surveys/{self.survey_id}/export-responses",
             endpoint_override=True,
-            json={"format": "json"},
+            json={"format": "json", "compress": compress},
         )
 
         progress_id = self.data["progressId"]
@@ -245,5 +246,10 @@ class QualtricsSurvey(QualtricsRequest):
         )
 
         logger.info(f"Writing data to file {output_file}")
-        with open(output_file, "wb") as f:
-            f.write(self.data)
+
+        if compress:
+            with open(output_file, "wb") as f:
+                f.write(self.data)
+        else:
+            with open(output_file, "w") as f:
+                f.write(json.dumps(self.data))
