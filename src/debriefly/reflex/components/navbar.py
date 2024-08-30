@@ -1,8 +1,6 @@
-"""Navbar component for the app."""
-
-from debriefly.reflex import styles
-
 import reflex as rx
+from debriefly.reflex import styles
+from .sidebar import info_footer
 
 
 def menu_item_icon(icon: str) -> rx.Component:
@@ -10,15 +8,6 @@ def menu_item_icon(icon: str) -> rx.Component:
 
 
 def menu_item(text: str, url: str) -> rx.Component:
-    """Menu item.
-
-    Args:
-        text: The text of the item.
-        url: The URL of the item.
-
-    Returns:
-        rx.Component: The menu item component.
-    """
     # Whether the item is active.
     active = (rx.State.router.page.path == url.lower()) | (
         (rx.State.router.page.path == "/") & text == "Overview"
@@ -29,10 +18,7 @@ def menu_item(text: str, url: str) -> rx.Component:
             rx.match(
                 text,
                 ("Overview", menu_item_icon("home")),
-                ("Table", menu_item_icon("table-2")),
-                ("About", menu_item_icon("book-open")),
                 ("Profile", menu_item_icon("user")),
-                ("Settings", menu_item_icon("settings")),
                 menu_item_icon("layout-dashboard"),
             ),
             rx.text(text, size="4", weight="regular"),
@@ -73,46 +59,12 @@ def menu_item(text: str, url: str) -> rx.Component:
     )
 
 
-def navbar_footer() -> rx.Component:
-    """Navbar footer.
-
-    Returns:
-        The navbar footer component.
-    """
-    return rx.hstack(
-        rx.link(
-            rx.text("Docs", size="3"),
-            href="https://reflex.dev/docs/getting-started/introduction/",
-            color_scheme="gray",
-            underline="none",
-        ),
-        rx.link(
-            rx.text("Blog", size="3"),
-            href="https://reflex.dev/blog/",
-            color_scheme="gray",
-            underline="none",
-        ),
-        rx.spacer(),
-        rx.color_mode.button(style={"opacity": "0.8", "scale": "0.95"}),
-        justify="start",
-        align="center",
-        width="100%",
-        padding="0.35em",
-    )
-
-
 def menu_button() -> rx.Component:
     # Get all the decorated pages and add them to the menu.
     from reflex.page import get_decorated_pages
 
     # The ordered page routes.
-    ordered_page_routes = [
-        "/",
-        "/table",
-        "/about",
-        "/profile",
-        "/settings",
-    ]
+    ordered_page_routes = ["/", "/profile"]
 
     # Get the decorated pages.
     pages = get_decorated_pages()
@@ -152,7 +104,7 @@ def menu_button() -> rx.Component:
                         for page in ordered_pages
                     ],
                     rx.spacer(),
-                    navbar_footer(),
+                    info_footer(),
                     spacing="4",
                     width="100%",
                 ),
@@ -170,19 +122,9 @@ def menu_button() -> rx.Component:
 
 
 def navbar() -> rx.Component:
-    """The navbar.
-
-    Returns:
-        The navbar component.
-    """
-
     return rx.el.nav(
         rx.hstack(
-            # The logo.
-            rx.color_mode_cond(
-                rx.image(src="/reflex_black.svg", height="1em"),
-                rx.image(src="/reflex_white.svg", height="1em"),
-            ),
+            rx.heading("Debriefly"),
             rx.spacer(),
             menu_button(),
             align="center",

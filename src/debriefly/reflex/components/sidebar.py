@@ -25,18 +25,7 @@ def clerk_navbar() -> rx.Component:
     )
 
 
-def sidebar_header() -> rx.Component:
-    return rx.hstack(
-        rx.heading("Debriefly", size="12", weight="bold"),
-        rx.spacer(),
-        align="center",
-        width="100%",
-        padding="0.35em",
-        margin_bottom="1em",
-    )
-
-
-def sidebar_footer() -> rx.Component:
+def info_footer() -> rx.Component:
     return rx.vstack(clerk_navbar(), rx.text(f"{__version__}", width="100%"))
 
 
@@ -55,10 +44,7 @@ def sidebar_item(text: str, url: str) -> rx.Component:
             rx.match(
                 text,
                 ("Overview", sidebar_item_icon("home")),
-                ("Table", sidebar_item_icon("table-2")),
-                ("About", sidebar_item_icon("book-open")),
                 ("Profile", sidebar_item_icon("user")),
-                ("Settings", sidebar_item_icon("settings")),
                 sidebar_item_icon("layout-dashboard"),
             ),
             rx.text(text, size="3", weight="regular"),
@@ -100,23 +86,11 @@ def sidebar_item(text: str, url: str) -> rx.Component:
 
 
 def sidebar() -> rx.Component:
-    """The sidebar.
-
-    Returns:
-        The sidebar component.
-    """
     # Get all the decorated pages and add them to the sidebar.
     from reflex.page import get_decorated_pages
 
     # The ordered page routes.
-    ordered_page_routes = [
-        "/",
-        "/table",
-        "/about",
-        "/account",
-        "/profile",
-        "/settings",
-    ]
+    ordered_page_routes = ["/", "/profile"]
 
     # Get the decorated pages.
     pages = get_decorated_pages()
@@ -133,7 +107,7 @@ def sidebar() -> rx.Component:
 
     return rx.flex(
         rx.vstack(
-            sidebar_header(),
+            rx.heading("Debriefly", align="left"),
             rx.vstack(
                 *[
                     sidebar_item(
@@ -147,9 +121,9 @@ def sidebar() -> rx.Component:
             ),
             rx.spacer(),
             rx.divider(),
-            sidebar_footer(),
+            info_footer(),
             justify="end",
-            align="end",
+            align="start",
             width=styles.sidebar_content_width,
             height="100dvh",
             padding="1em",
