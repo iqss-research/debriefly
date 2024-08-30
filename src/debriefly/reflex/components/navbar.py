@@ -178,13 +178,7 @@ def navbar() -> rx.Component:
 
     return rx.el.nav(
         rx.hstack(
-            # The logo.
-            rx.color_mode_cond(
-                rx.image(src="/reflex_black.svg", height="1em"),
-                rx.image(src="/reflex_white.svg", height="1em"),
-            ),
-            rx.spacer(),
-            menu_button(),
+            rx.text("debriefly"),
             align="center",
             width="100%",
             padding_y="1.25em",

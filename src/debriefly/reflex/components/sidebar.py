@@ -116,6 +116,7 @@ def sidebar() -> rx.Component:
         "/account",
         "/profile",
         "/settings",
+        "/chat",
     ]
 
     # Get the decorated pages.

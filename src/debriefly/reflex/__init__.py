@@ -9,5 +9,5 @@ app = rx.App(
     stylesheets=styles.base_stylesheets,
     title="Dashboard Template",
     description="A dashboard template for Reflex.",
-    onloady=State.load_entries,
+    onload=State.load_entries,
 )
