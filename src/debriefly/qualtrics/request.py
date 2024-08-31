@@ -78,7 +78,9 @@ class QualtricsRequest:
             if method == "put":
                 self.data = response["meta"]
             else:
-                self.data = response["result"]
+                # The export-responses endpoint returns a `responses`
+                # key instead of a `result` key
+                self.data = response.get("result", response.get("responses"))
         else:
             content = response.content
             self.data = content
