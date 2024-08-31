@@ -1,7 +1,7 @@
 import reflex as rx
 import reflex_clerk as clerk
 from debriefly import __version__
-from .. import styles
+from debriefly.reflex import styles
 
 
 def clerk_navbar() -> rx.Component:
@@ -10,18 +10,7 @@ def clerk_navbar() -> rx.Component:
             clerk.sign_in_button(rx.button("Sign In")),
             clerk.sign_up_button(rx.button("Sign Up")),
         ),
-        clerk.signed_in(
-            rx.box(rx.text(clerk.ClerkState.user.first_name)),
-            rx.cond(
-                clerk.ClerkState.user.has_image,
-                rx.chakra.avatar(
-                    src=clerk.ClerkState.user.image_url,
-                    name=clerk.ClerkState.user.first_name,
-                    size="sm",
-                ),
-            ),
-            clerk.sign_out_button(rx.button("Sign Out")),
-        ),
+        clerk.signed_in(rx.box(clerk.user_button(), clerk.organization_switcher())),
     )
 
 

@@ -18,7 +18,7 @@ def profile() -> rx.Component:
                 rx.text("You have admin access to debriefly.", size="3"),
                 width="100%",
             ),
-            role="org:admin",
+            permission="org:app:admin",
         ),
         rx.flex(
             rx.vstack(

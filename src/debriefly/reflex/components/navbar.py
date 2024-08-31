@@ -1,6 +1,6 @@
 import reflex as rx
 from debriefly.reflex import styles
-from .sidebar import info_footer
+from debriefly.reflex.components.sidebar import info_footer
 
 
 def menu_item_icon(icon: str) -> rx.Component:
