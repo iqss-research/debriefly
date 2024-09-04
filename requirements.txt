@@ -10,3 +10,7 @@ reflex-clerk@git+https://github.com/vineetbansal/reflex-clerk.git
 authlib
 psycopg2-binary
 pyyaml
+
+#required for the analyses components
+sentence_transformers
+numpy
