@@ -15,11 +15,10 @@ def add_args(parser):
     parser.add_argument(
         "--output_file", type=str, required=True, help="Path to the saved csv file."
     )
-    parser.add_argument("--trim_ai", type = bool, default = True, help = "Trim the AI part of the transcript.")
     return parser
 
 
-def do_search(transcripts: list, output_file: str, keyword: str, trim_ai: bool = True):
+def do_search(transcripts: list, output_file: str, keyword: str):
     '''
     function to implement the semantic search by keywords
 
@@ -27,14 +26,10 @@ def do_search(transcripts: list, output_file: str, keyword: str, trim_ai: bool =
     - transcripts: list of strings, each string is a transcript
     - output_file: str, the path to save the output
     - keyword: str, the keyword to search for
-    - trim_ai: bool, whether to trim the AI part of the transcript (default = True)
     '''
 
     logger.info("Searching transcripts")
-    if trim_ai:
-        logger.info("Trimming AI part of the transcript")
-        print(transcripts[0])
-        raise    #TO DO: implement the AI part trimming
+
     with open(output_file, "w") as csvfile:
         csv_writer = csv.writer(csvfile)
 
