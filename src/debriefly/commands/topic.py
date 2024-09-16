@@ -2,7 +2,8 @@ import logging
 import tempfile
 import json
 from debriefly.qualtrics import QualtricsSession, QualtricsSurvey
-#for topic modeling
+
+# for topic modeling
 from bertopic import BERTopic
 from bertopic.representation import KeyBERTInspired
 
@@ -18,19 +19,21 @@ def add_args(parser):
 
 
 def do_topic(transcripts: list, output_file: str):
-    '''
+    """
     function to implement the topic modeling with BERTopic
 
     Inputs:
     - transcripts: list of strings, each string is a transcript
     - output_file: str, the path to save the output (output is currently a topic list)
 
-    '''
+    """
     logger.info("Fitting topic model with BERTopic...")
 
-    #fitting topic model
+    # fitting topic model
     representation_model = KeyBERTInspired()
-    topic_model = BERTopic(n_gram_range=(1, 3), min_topic_size=3, representation_model=representation_model)
+    topic_model = BERTopic(
+        n_gram_range=(1, 3), min_topic_size=3, representation_model=representation_model
+    )
     topics, _ = topic_model.fit_transform(transcripts)
 
     topic_model.get_topic_info().to_csv(output_file, index=False)

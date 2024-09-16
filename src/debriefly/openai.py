@@ -7,13 +7,15 @@ from rich.live import Live
 import time
 from openai import OpenAI, AzureOpenAI
 
-#functionalities added
+# functionalities added
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
-from azure.search.documents.indexes.models import SearchIndex, SearchField, SearchFieldDataType
-import csv
-import numpy as np
+from azure.search.documents.indexes.models import (
+    SearchIndex,
+    SearchField,
+    SearchFieldDataType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,12 +115,14 @@ class Client:
         )
         return transcript
 
+
 class AzureOpenAISearch:
-    '''
+    """
     A class that encapsulates the Azure OpenAI and Azure Search functionalities (semantic search and RAG: retrieved-augmented generation).
 
     TO DO: combine with the Client class.
-    '''
+    """
+
     def __init__(self, index_name):
         self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.api_key = os.getenv("AZURE_OPENAI_API_KEY")
@@ -127,33 +131,44 @@ class AzureOpenAISearch:
         self.index_name = index_name
 
         self.openai_client = AzureOpenAI(
-            azure_endpoint= self.azure_endpoint,
-            api_key= self.api_key,
-            api_version="2024-02-01"
+            azure_endpoint=self.azure_endpoint,
+            api_key=self.api_key,
+            api_version="2024-02-01",
         )
         self.credential = AzureKeyCredential(self.admin_key)
-        self.search_client = SearchClient(endpoint = self.azure_search_service_endpoint, index_name= self.index_name, credential= self.credential)
-        self.search_index_client = SearchIndexClient(endpoint= self.azure_search_service_endpoint, index_name = self.index_name, credential= self.credential)
+        self.search_client = SearchClient(
+            endpoint=self.azure_search_service_endpoint,
+            index_name=self.index_name,
+            credential=self.credential,
+        )
+        self.search_index_client = SearchIndexClient(
+            endpoint=self.azure_search_service_endpoint,
+            index_name=self.index_name,
+            credential=self.credential,
+        )
 
     def upload(self, documents: list[str]):
-        '''
+        """
         upload documents to the Azure Search database
-        '''
+        """
         # Define an index
         fields = [
             SearchField(name="id", type=SearchFieldDataType.String, key=True),
-            SearchField(name="content", type=SearchFieldDataType.String)
+            SearchField(name="content", type=SearchFieldDataType.String),
         ]
         index = SearchIndex(name=self.index_name, fields=fields)
         self.search_index_client.create_index(index)
 
         # Upload your list of strings to the index
-        docs = [{"id": str(i), "content": content} for i, content in enumerate(documents)]
+        docs = [
+            {"id": str(i), "content": content} for i, content in enumerate(documents)
+        ]
         self.search_client.upload_documents(docs)
+
     ########################
     # Following methods are commented out as they are not currently in use.
     ########################
-    #def get_embeddings(self, documents: list[str]) -> list[list[float]]:
+    # def get_embeddings(self, documents: list[str]) -> list[list[float]]:
     #    '''
     #    Get the embedding of the documents
     #
@@ -169,7 +184,7 @@ class AzureOpenAISearch:
     #        embedding_list.append(response.data[0].embedding)
     #    return embedding_list
     #
-    #def search(self, query: str, documents: list[str], output_file: str):
+    # def search(self, query: str, documents: list[str], output_file: str):
     #    '''
     #    Search the transcripts based on the query. Output the results to a CSV file.
     #
@@ -200,12 +215,12 @@ class AzureOpenAISearch:
     #            csv_writer.writerow(result)
     #
     def rag(self, query: str):
-        '''
+        """
         Retrieve and generate response based on the query
-        '''
+        """
         # Get embeddings for the query
         completion = self.openai_client.chat.completions.create(
-            model= os.getenv("AZURE_OPENAI_DEPLOYMENT_MODEL"),
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_MODEL"),
             messages=[
                 {
                     "role": "user",
@@ -213,21 +228,21 @@ class AzureOpenAISearch:
                 },
             ],
             extra_body={
-                "data_sources":[
+                "data_sources": [
                     {
                         "type": "azure_search",
                         "parameters": {
                             "endpoint": self.azure_search_service_endpoint,
                             "index_name": self.index_name,
-                        "authentication": {
-                            "type": "api_key",
-                            "key":  self.admin_key,
-                                },
-                            }
-                        }
-                    ],
-                },
-            )
+                            "authentication": {
+                                "type": "api_key",
+                                "key": self.admin_key,
+                            },
+                        },
+                    }
+                ],
+            },
+        )
         result = completion.choices[0].message.content
         print(result)
 
