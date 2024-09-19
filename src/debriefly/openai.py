@@ -122,8 +122,6 @@ class Client:
 class AzureOpenAISearch:
     """
     A class that encapsulates the Azure OpenAI and Azure Search functionalities (semantic search and RAG: retrieved-augmented generation).
-
-    TO DO: combine with the Client class.
     """
 
     @staticmethod
