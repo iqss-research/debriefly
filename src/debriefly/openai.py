@@ -7,7 +7,6 @@ from rich.live import Live
 import time
 from openai import OpenAI, AzureOpenAI
 
-# functionalities added
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
@@ -66,7 +65,7 @@ class Client:
         else:
             raise ValueError("No OpenAI client found")
 
-    def complete(self, user_input, chat_history):
+    def complete(self, user_input, chat_history, stream=True, extra_body=None):
         messages = [{"role": "system", "content": self.system_message}]
         for human_input, assistant_response in chat_history:
             if human_input is not None:
@@ -78,14 +77,18 @@ class Client:
             model=self.model,
             messages=messages,
             temperature=self.temperature,
-            stream=True,
+            stream=stream,
+            extra_body=extra_body,
         )
 
-        for chunk in response:
-            if chunk.choices:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    yield delta
+        if stream:
+            for chunk in response:
+                if chunk.choices:
+                    delta = chunk.choices[0].delta.content
+                    if delta:
+                        yield delta
+        else:
+            yield response.choices[0].message.content
 
     def interactive_chat(self, delay=0.05) -> str:
         console = Console()
@@ -123,25 +126,39 @@ class AzureOpenAISearch:
     TO DO: combine with the Client class.
     """
 
-    def __init__(self, index_name):
-        self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        self.api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        self.admin_key = os.getenv("AZURE_OPENAI_SEARCH_KEY")
-        self.azure_search_service_endpoint = os.getenv("AZURE_OPENAI_SEARCH_ENDPOINT")
-        self.index_name = index_name
+    @staticmethod
+    def survey_id_to_index_name(survey_id: str) -> str:
+        """
+        Convert a qualtrics survey id to an Azure Search index name
+        Index name must only contain lowercase letters, digits or dashes,
+        cannot start or end with dashes and is limited to 128 characters.
+        """
+        index_name = survey_id.lower().replace("_", "-")[:128]
+        logger.debug(f"Converted {survey_id=} to {index_name=}")
+        return index_name
 
-        self.openai_client = AzureOpenAI(
-            azure_endpoint=self.azure_endpoint,
-            api_key=self.api_key,
-            api_version="2024-02-01",
+    def __init__(self, index_name):
+        self.openai_client = Client()
+
+        self.index_name = index_name
+        self.search_index = SearchIndex(
+            name=self.index_name,
+            fields=[
+                SearchField(name="id", type=SearchFieldDataType.String, key=True),
+                SearchField(name="content", type=SearchFieldDataType.String),
+            ],
         )
+
+        self.admin_key = os.getenv("AZURE_OPENAI_SEARCH_KEY")
         self.credential = AzureKeyCredential(self.admin_key)
-        self.search_client = SearchClient(
+
+        self.azure_search_service_endpoint = os.getenv("AZURE_OPENAI_SEARCH_ENDPOINT")
+        self.search_index_client = SearchIndexClient(
             endpoint=self.azure_search_service_endpoint,
             index_name=self.index_name,
             credential=self.credential,
         )
-        self.search_index_client = SearchIndexClient(
+        self.search_client = SearchClient(
             endpoint=self.azure_search_service_endpoint,
             index_name=self.index_name,
             credential=self.credential,
@@ -149,15 +166,9 @@ class AzureOpenAISearch:
 
     def upload(self, documents: list[str]):
         """
-        upload documents to the Azure Search database
+        Upload documents to the Azure Search database
         """
-        # Define an index
-        fields = [
-            SearchField(name="id", type=SearchFieldDataType.String, key=True),
-            SearchField(name="content", type=SearchFieldDataType.String),
-        ]
-        index = SearchIndex(name=self.index_name, fields=fields)
-        self.search_index_client.create_index(index)
+        self.search_index_client.create_or_update_index(self.search_index)
 
         # Upload your list of strings to the index
         docs = [
@@ -165,86 +176,33 @@ class AzureOpenAISearch:
         ]
         self.search_client.upload_documents(docs)
 
-    ########################
-    # Following methods are commented out as they are not currently in use.
-    ########################
-    # def get_embeddings(self, documents: list[str]) -> list[list[float]]:
-    #    '''
-    #    Get the embedding of the documents
-    #
-    #    Inputs:
-    #    - documents: list of strings, each string is a document
-    #
-    #    Outputs:
-    #    - embedding_list: list of embeddings
-    #    '''
-    #    embedding_list = []
-    #    for doc in documents:
-    #        response = self.openai_client.embeddings.create(input=doc, model="text-embedding-3-small")  # Make sure to use the correct embedding model
-    #        embedding_list.append(response.data[0].embedding)
-    #    return embedding_list
-    #
-    # def search(self, query: str, documents: list[str], output_file: str):
-    #    '''
-    #    Search the transcripts based on the query. Output the results to a CSV file.
-    #
-    #    Inputs:
-    #    - documents: list of strings, each string is a document
-    #    - query: str, the query to search for
-    #    - output_file: str, the path to save the output
-    #
-    #    '''
-    #    #obtain the embedding for the query
-    #    query_embed = self.get_embeddings([query])
-    #    embeddings = self.get_embeddings(documents)
-    #
-    #    #calculate cosine-similarity
-    #    embeddings_norm = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-    #    query_embed_norm = query_embed / np.linalg.norm(query_embed)
-    #    cosine_similarities = np.dot(embeddings_norm, query_embed_norm.T).reshape(-1)
-    #
-    #    #sort the transcripts according to the cosine-similarity
-    #    valid_indices = [index for index in np.argsort(-cosine_similarities) if index < len(documents)]
-    #    result_list = [(documents[i], cosine_similarities[i]) for i in valid_indices]
-    #
-    #    #write csv file
-    #    with open(output_file, "w") as csvfile:
-    #        csv_writer = csv.writer(csvfile)
-    #        csv_writer.writerow(["Transcript", "Cosine Similarity"])
-    #        for result in result_list:
-    #            csv_writer.writerow(result)
-    #
     def rag(self, query: str):
-        """
-        Retrieve and generate response based on the query
-        """
-        # Get embeddings for the query
-        completion = self.openai_client.chat.completions.create(
-            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_MODEL"),
-            messages=[
+        extra_body = {
+            "data_sources": [
                 {
-                    "role": "user",
-                    "content": query,
-                },
-            ],
-            extra_body={
-                "data_sources": [
-                    {
-                        "type": "azure_search",
-                        "parameters": {
-                            "endpoint": self.azure_search_service_endpoint,
-                            "index_name": self.index_name,
-                            "authentication": {
-                                "type": "api_key",
-                                "key": self.admin_key,
-                            },
+                    "type": "azure_search",
+                    "parameters": {
+                        "endpoint": self.azure_search_service_endpoint,
+                        "index_name": self.index_name,
+                        "authentication": {
+                            "type": "api_key",
+                            "key": self.admin_key,
                         },
-                    }
-                ],
-            },
+                    },
+                }
+            ],
+        }
+        gen = self.openai_client.complete(
+            user_input=query, chat_history=[], stream=False, extra_body=extra_body
         )
-        result = completion.choices[0].message.content
-        print(result)
+        # We get a generator with a single response back - consume it and return to caller
+        result = list(gen)[0]
+
+        return result
+
+    def delete_index(self):
+        logger.info(f"Deleting index {self.index_name}")
+        self.search_index_client.delete_index(self.search_index)
 
 
 @cache

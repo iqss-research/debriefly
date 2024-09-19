@@ -1,5 +1,7 @@
 import logging
 import time
+import tempfile
+import contextlib
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Dict
 from functools import cached_property
@@ -253,3 +255,11 @@ class QualtricsSurvey(QualtricsRequest):
         else:
             with open(output_file, "w") as f:
                 f.write(json.dumps(self.data))
+
+    @contextlib.contextmanager
+    def transcripts(self):
+        with tempfile.NamedTemporaryFile() as f:
+            self.collect_responses(f.name, compress=False)
+            content = json.loads(open(f.name, "r").read())
+            transcripts = [r["values"]["debriefly"] for r in content]
+            yield transcripts

@@ -1,9 +1,5 @@
 import logging
-import tempfile
-import json
 from debriefly.qualtrics import QualtricsSession, QualtricsSurvey
-
-# for topic modeling
 from bertopic import BERTopic
 from bertopic.representation import KeyBERTInspired
 
@@ -42,12 +38,7 @@ def do_topic(transcripts: list, output_file: str):
 def topic(survey_id, output_file):
     with QualtricsSession():
         survey = QualtricsSurvey(survey_id=survey_id)
-        with tempfile.NamedTemporaryFile() as f:
-            logger.info("Collecting responses")
-            survey.collect_responses(f.name, compress=False)
-            content = json.loads(open(f.name, "r").read())
-            transcripts = [r["values"]["debriefly"] for r in content]
-
+        with survey.transcripts() as transcripts:
             do_topic(transcripts, output_file=output_file)
 
 
