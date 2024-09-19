@@ -2,27 +2,27 @@ import reflex as rx
 from sqlmodel import select, asc, desc, or_, func
 import logging
 import reflex_clerk as clerk
-from .models import Question, Profile
+from debriefly.reflex.backend.models import Config, Question, Answer, Profile
 from debriefly.qualtrics import QualtricsSession, QualtricsSurveyCreator
-from debriefly.openai import get_client
 
 
 logger = logging.getLogger(__name__)
 
 
 class State(clerk.ClerkState):
-    """The app state."""
-
     current_question: Question = Question()
     questions: list[Question] = []
     search_value: str = ""
     sort_value: str = ""
     sort_reverse: bool = False
-    length: str = "300"
-    chat_content_data: str = "Click 'Analyze' to generate OpenAI's view on a question."
-    gen_response = False
 
-    profile = Profile()
+    profile: Profile = Profile()
+    config: dict[str, str] = {}
+
+    def load_config(self):
+        with rx.session() as session:
+            for config in session.exec(select(Config)):
+                self.config[config.name] = config.value
 
     def load_entries(self) -> list[Question]:
         with rx.session() as session:
@@ -34,7 +34,7 @@ class State(clerk.ClerkState):
                         *[
                             getattr(Question, field).ilike(search_value)
                             for field in Question.get_fields()
-                            if field != "id"
+                            if not field.endswith("id")
                         ],
                     )
                 )
@@ -54,10 +54,22 @@ class State(clerk.ClerkState):
             self.questions = session.exec(query).all()
 
     def load_profile(self):
-        with rx.session() as session:
-            self.profile = session.exec(
-                select(Profile).where(Profile.user_id == self.user_id)
-            ).first() or Profile(user_id=self.user_id)
+        logger.info("Loading Profile")
+        if self.user_id is not None:
+            with rx.session() as session:
+                profile = session.exec(
+                    select(Profile).where(Profile.user_id == self.user_id)
+                ).first()
+                if profile is None:
+                    logger.info(f"Saving profile for user {self.user_id}")
+                    profile = Profile(user_id=self.user_id)
+                    session.add(profile)
+                    session.commit()
+                    self.profile = session.exec(
+                        select(Profile).where(Profile.user_id == self.user_id)
+                    ).first()
+                else:
+                    self.profile = profile
 
     def sort_values(self, sort_value: str):
         self.sort_value = sort_value
@@ -108,6 +120,10 @@ class State(clerk.ClerkState):
         self.load_entries()
         return rx.toast.info(f"Question {question.id} has been deleted.")
 
+    def download_question(self, id: int):
+        csv_data = "id,question_text\n0,foo"
+        return rx.download(data=csv_data, filename=f"data_{id}.csv")
+
     def update_profile(self, form_data: dict):
         for field in Profile.get_fields():
             if field != "id" and field in form_data:
@@ -117,29 +133,6 @@ class State(clerk.ClerkState):
             session.commit()
             self.load_profile()
         return rx.toast.success("Profile updated successfully")
-
-    @rx.background
-    async def call_openai(self):
-        client = get_client(
-            system_message=f"You are a chatbot that answers all question in a maximum of {self.length} characters."
-        )
-        for response_text in client.complete(
-            user_input=f"What do you think of the following as a survey question: {self.current_question.question_text}",
-            chat_history=[],
-        ):
-            async with self:
-                if response_text is not None:
-                    self.chat_content_data += response_text
-                yield
-
-        async with self:
-            self.gen_response = False
-
-    def analyze(self, question: Question):
-        self.current_question = Question(**question)
-        self.gen_response = True
-        self.chat_content_data = ""
-        return State.call_openai
 
     def create_qualtrics_survey(self, question: Question):
         with QualtricsSession(
@@ -155,6 +148,62 @@ class State(clerk.ClerkState):
             return rx.toast.success(
                 f"Survey {survey.survey_id} created", position="top-center"
             )
-            # TypeError: Your handler State.create_qualtrics_survey must only return/yield:
-            # None, Events or other EventHandlers referenced by their class (not using `self`)
-            # return survey.survey_id
+
+
+class AnswerState(rx.State):
+    # TODO: Inherit from clerk.ClerkState; filter by user_id as well
+    question_id: int
+    answers: list[Answer] = []
+    search_value: str = ""
+    sort_value: str = ""
+    sort_reverse: bool = False
+
+    def load_entries(self) -> list[Answer]:
+        self.question_id = self.router.page.params.get("question_id")
+        with rx.session() as session:
+            query = select(Answer).where(Answer.question_id == self.question_id)
+            if self.search_value:
+                search_value = f"%{str(self.search_value).lower()}%"
+                query = query.where(
+                    or_(
+                        *[
+                            getattr(Answer, field).ilike(search_value)
+                            for field in Answer.get_fields()
+                            if not field.endswith("id")
+                        ],
+                    )
+                )
+
+            if self.sort_value:
+                sort_column = getattr(Answer, self.sort_value)
+                if self.sort_value == "id":
+                    order = desc(sort_column) if self.sort_reverse else asc(sort_column)
+                else:
+                    order = (
+                        desc(func.lower(sort_column))
+                        if self.sort_reverse
+                        else asc(func.lower(sort_column))
+                    )
+                query = query.order_by(order)
+
+            self.answers = session.exec(query).all()
+
+    def sort_values(self, sort_value: str):
+        self.sort_value = sort_value
+        self.load_entries()
+
+    def toggle_sort(self):
+        self.sort_reverse = not self.sort_reverse
+        self.load_entries()
+
+    def filter_values(self, search_value):
+        self.search_value = search_value
+        self.load_entries()
+
+    def delete_answer(self, id: int):
+        with rx.session() as session:
+            answer = session.exec(select(Answer).where(Answer.id == id)).first()
+            session.delete(answer)
+            session.commit()
+        self.load_entries()
+        return rx.toast.info(f"Answer {answer.id} has been deleted.")

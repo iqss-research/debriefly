@@ -1,27 +1,17 @@
-import os
 from dotenv import load_dotenv
-from openai import OpenAI
 from debriefly.qualtrics import (
-    QualtricsSession,
     QualtricsSurvey,
     QualtricsSurveySession,
 )
-
+from debriefly.openai import get_client
 
 if __name__ == "__main__":
     load_dotenv()
 
-    openai_client = OpenAI(
-        organization=os.environ["OPENAI_ORG_ID"],
-        project=os.environ["OPENAI_PROJECT_ID"],
-    )
+    openai_client = get_client()
 
-    with QualtricsSession(
-        api_token="j0y0qnneD2uf1P4XAZLPql0WIXGn0LAhIr4WMO6a",
-        data_center="sjc1",
-        openai_client=openai_client,
-    ):
-        survey = QualtricsSurvey(survey_id="SV_8ADyHCnFttPUPJA")
-        survey_session = QualtricsSurveySession(survey=survey)
+    survey = QualtricsSurvey(survey_id="SV_1ELMxREKi1ZleYu")
+    print(survey)
+    survey_session = QualtricsSurveySession(survey=survey)
 
-        survey_session.run()
+    survey_session.run()

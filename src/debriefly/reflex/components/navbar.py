@@ -1,26 +1,18 @@
 import reflex as rx
 from debriefly.reflex import styles
-from debriefly.reflex.components.sidebar import info_footer
+from debriefly.reflex.components.sidebar import pages, info_footer
 
 
 def menu_item_icon(icon: str) -> rx.Component:
     return rx.icon(icon, size=20)
 
 
-def menu_item(text: str, url: str) -> rx.Component:
+def menu_item(text: str, url: str, icon: str) -> rx.Component:
     # Whether the item is active.
-    active = (rx.State.router.page.path == url.lower()) | (
-        (rx.State.router.page.path == "/") & text == "Overview"
-    )
+    active = rx.State.router.page.path == url.lower()
 
     return rx.link(
         rx.hstack(
-            rx.match(
-                text,
-                ("Overview", menu_item_icon("home")),
-                ("Profile", menu_item_icon("user")),
-                menu_item_icon("layout-dashboard"),
-            ),
             rx.text(text, size="4", weight="regular"),
             color=rx.cond(
                 active,
@@ -60,25 +52,6 @@ def menu_item(text: str, url: str) -> rx.Component:
 
 
 def menu_button() -> rx.Component:
-    # Get all the decorated pages and add them to the menu.
-    from reflex.page import get_decorated_pages
-
-    # The ordered page routes.
-    ordered_page_routes = ["/", "/profile"]
-
-    # Get the decorated pages.
-    pages = get_decorated_pages()
-
-    # Include all pages even if they are not in the ordered_page_routes.
-    ordered_pages = sorted(
-        pages,
-        key=lambda page: (
-            ordered_page_routes.index(page["route"])
-            if page["route"] in ordered_page_routes
-            else len(ordered_page_routes)
-        ),
-    )
-
     return rx.drawer.root(
         rx.drawer.trigger(
             rx.icon("align-justify"),
@@ -95,13 +68,8 @@ def menu_button() -> rx.Component:
                     ),
                     rx.divider(),
                     *[
-                        menu_item(
-                            text=page.get(
-                                "title", page["route"].strip("/").capitalize()
-                            ),
-                            url=page["route"],
-                        )
-                        for page in ordered_pages
+                        menu_item(text=page[0], url=page[1], icon=page[2])
+                        for page in pages
                     ],
                     rx.spacer(),
                     info_footer(),

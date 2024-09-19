@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.live import Live
 import time
-from openai import OpenAI, AzureOpenAI
+from openai import AzureOpenAI
 
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
@@ -33,11 +33,21 @@ class Client:
 
     def __init__(
         self,
+        api_key=None,
+        api_version=None,
+        api_endpoint=None,
+        api_model=None,
         initial_message="",
         system_message="",
         temperature=0.7,
         end_token="<end_of_chat>",
     ):
+
+        api_key = api_key or os.getenv("AZURE_OPENAI_API_KEY")
+        api_version = api_version or os.getenv("AZURE_OPENAI_API_VERSION")
+        api_endpoint = api_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
+        api_model = api_model or os.getenv("AZURE_OPENAI_DEPLOYMENT_MODEL")
+
         self.client = self.model = None
         self.initial_message = initial_message
         self.temperature = temperature
@@ -48,22 +58,13 @@ class Client:
             + f"\nInclude the special {self.end_token} token in the response to end the chat."
         )
 
-        if "AZURE_OPENAI_API_KEY" in os.environ:
-            logger.debug("Instantiating AzureOpenAI client")
-            self.client = AzureOpenAI(
-                api_version=os.environ["AZURE_OPENAI_API_VERSION"],
-                azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-            )
-            self.model = os.environ["AZURE_OPENAI_DEPLOYMENT_MODEL"]
-        elif "OPENAI_ORG_ID" in os.environ:
-            logger.debug("Instantiating OpenAI client")
-            self.client = OpenAI(
-                organization=os.environ["OPENAI_ORG_ID"],
-                project=os.environ["OPENAI_PROJECT_ID"],
-            )
-            self.model = "gpt-4o-mini"
-        else:
-            raise ValueError("No OpenAI client found")
+        logger.debug("Instantiating AzureOpenAI client")
+        self.client = AzureOpenAI(
+            api_key=api_key,
+            api_version=api_version,
+            azure_endpoint=api_endpoint,
+        )
+        self.model = api_model
 
     def complete(self, user_input, chat_history, stream=True, extra_body=None):
         messages = [{"role": "system", "content": self.system_message}]
@@ -135,8 +136,22 @@ class AzureOpenAISearch:
         logger.debug(f"Converted {survey_id=} to {index_name=}")
         return index_name
 
-    def __init__(self, index_name):
-        self.openai_client = Client()
+    def __init__(
+        self,
+        index_name,
+        api_key=None,
+        api_version=None,
+        api_endpoint=None,
+        api_model=None,
+        search_key=None,
+        search_endpoint=None,
+    ):
+        self.openai_client = get_client(
+            api_key=api_key,
+            api_version=api_version,
+            api_endpoint=api_endpoint,
+            api_model=api_model,
+        )
 
         self.index_name = index_name
         self.search_index = SearchIndex(
@@ -147,10 +162,12 @@ class AzureOpenAISearch:
             ],
         )
 
-        self.admin_key = os.getenv("AZURE_OPENAI_SEARCH_KEY")
+        self.admin_key = search_key or os.getenv("AZURE_OPENAI_SEARCH_KEY")
         self.credential = AzureKeyCredential(self.admin_key)
 
-        self.azure_search_service_endpoint = os.getenv("AZURE_OPENAI_SEARCH_ENDPOINT")
+        self.azure_search_service_endpoint = search_endpoint or os.getenv(
+            "AZURE_OPENAI_SEARCH_ENDPOINT"
+        )
         self.search_index_client = SearchIndexClient(
             endpoint=self.azure_search_service_endpoint,
             index_name=self.index_name,
@@ -210,9 +227,17 @@ def get_client(
     system_message="",
     temperature=0.7,
     end_token="<end_of_chat>",
+    api_key=None,
+    api_version=None,
+    api_endpoint=None,
+    api_model=None,
 ):
     try:
         client = Client(
+            api_key=api_key,
+            api_version=api_version,
+            api_endpoint=api_endpoint,
+            api_model=api_model,
             initial_message=initial_message,
             system_message=system_message,
             temperature=temperature,

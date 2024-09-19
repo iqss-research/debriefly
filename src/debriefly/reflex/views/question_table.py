@@ -1,6 +1,8 @@
 import reflex as rx
-from ..backend.backend import State, Question
-from ..components.form_field import form_field
+from debriefly.reflex.backend.backend import State
+from debriefly.reflex.backend.models import Question
+from debriefly.reflex.components.analyze.state import State as AnalyzeState
+from debriefly.reflex.components.form_field import form_field
 
 
 def _header_cell(text: str, icon: str):
@@ -108,21 +110,37 @@ def _show_question(question: Question):
         rx.table.cell(question.id),
         rx.table.cell(question.question_text),
         rx.table.cell(
+            rx.link(
+                question.answers.length(),
+                href=f"answers/{question.id}",
+            )
+        ),
+        rx.table.cell(rx.moment(question.created_on, format="MM/DD/YY HH:mm")),
+        rx.table.cell(
             rx.hstack(
-                rx.button(
-                    rx.icon("bot", size=22),
-                    rx.text("Analyze", size="3"),
-                    color_scheme="blue",
-                    on_click=State.analyze(question),
-                    disabled=State.gen_response,
+                rx.tooltip(
+                    rx.icon_button(
+                        rx.icon("link", size=22),
+                        # TODO: base url?
+                        on_click=rx.set_clipboard(
+                            f"http://localhost:3000/survey/{question.id}"
+                        ),
+                        size="2",
+                        variant="solid",
+                        color_scheme="blue",
+                    ),
+                    content="Copy survey link",
                 ),
                 rx.alert_dialog.root(
-                    rx.alert_dialog.trigger(
-                        rx.icon_button(
-                            rx.icon("file-plus-2", size=22),
-                            size="2",
-                            color_scheme="green",
+                    rx.tooltip(
+                        rx.alert_dialog.trigger(
+                            rx.icon_button(
+                                rx.icon("file-plus-2", size=22),
+                                size="2",
+                                color_scheme="green",
+                            )
                         ),
+                        content="Export to Qualtrics",
                     ),
                     rx.alert_dialog.content(
                         rx.alert_dialog.title("Generate Survey"),
@@ -142,12 +160,50 @@ def _show_question(question: Question):
                     ),
                 ),
                 _update_question_dialog(question),
-                rx.icon_button(
-                    rx.icon("trash-2", size=22),
-                    on_click=lambda: State.delete_question(getattr(question, "id")),
-                    size="2",
-                    variant="solid",
-                    color_scheme="red",
+                rx.tooltip(
+                    rx.link(
+                        rx.icon_button(
+                            rx.icon("activity", size=22),
+                            size="2",
+                            variant="solid",
+                            color_scheme="green",
+                            on_click=lambda: AnalyzeState.load_survey_debriefings(
+                                question.id
+                            ),
+                        ),
+                        href=f"analyze/{question.id}",
+                    ),
+                    content="Analyze responses",
+                ),
+                rx.alert_dialog.root(
+                    rx.tooltip(
+                        rx.alert_dialog.trigger(
+                            rx.icon_button(
+                                rx.icon("trash-2", size=22),
+                                size="2",
+                                color_scheme="red",
+                            )
+                        ),
+                        content="Delete question",
+                    ),
+                    rx.alert_dialog.content(
+                        rx.alert_dialog.title("Delete question"),
+                        rx.alert_dialog.description(
+                            "Are you sure?",
+                        ),
+                        rx.flex(
+                            rx.alert_dialog.cancel(
+                                rx.button("Cancel"),
+                            ),
+                            rx.alert_dialog.action(
+                                rx.button("Delete"),
+                                on_click=lambda: State.delete_question(
+                                    getattr(question, "id")
+                                ),
+                            ),
+                            spacing="3",
+                        ),
+                    ),
                 ),
                 min_width="max-content",
             )
@@ -159,14 +215,17 @@ def _show_question(question: Question):
 
 def _update_question_dialog(question):
     return rx.dialog.root(
-        rx.dialog.trigger(
-            rx.icon_button(
-                rx.icon("square-pen", size=22),
-                color_scheme="green",
-                size="2",
-                variant="solid",
-                on_click=lambda: State.get_question(question),
+        rx.tooltip(
+            rx.dialog.trigger(
+                rx.icon_button(
+                    rx.icon("square-pen", size=22),
+                    color_scheme="green",
+                    size="2",
+                    variant="solid",
+                    on_click=lambda: State.get_question(question),
+                )
             ),
+            content="Edit question",
         ),
         rx.dialog.content(
             rx.hstack(
@@ -291,6 +350,8 @@ def main_table():
                     rx.table.row(
                         _header_cell("ID", "square-user-round"),
                         _header_cell("Question", "mail"),
+                        _header_cell("Responses", "scroll"),
+                        _header_cell("Created", "clock"),
                         _header_cell("Actions", "cog"),
                     ),
                 ),

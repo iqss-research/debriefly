@@ -7,13 +7,22 @@ logger = logging.getLogger(__name__)
 
 class QualtricsRequest:
     # Set by an enclosing QualtricsSession context-manager
-    data_center = ""
-    default_request_kwargs = {}
+    data_center = "sjc1"
+    default_request_kwargs = {
+        "headers": {
+            "Content-Type": "application/json",
+            "x-api-token": "j0y0qnneD2uf1P4XAZLPql0WIXGn0LAhIr4WMO6a",
+        }
+    }
     openai_client = None
 
     # Meant to be overridden by subclasses
     endpoint = "whoami"
     method = "get"
+
+    @classmethod
+    def to_dict(cls):
+        return {"data_center": cls.data_center}
 
     @classmethod
     def from_data(cls, data):

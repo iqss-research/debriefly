@@ -90,7 +90,7 @@ class QualtricsSurvey(QualtricsRequest):
         self.initial_message = ""  # TODO: collapse into system_message?
 
     def __str__(self):
-        return f"QualtricsSurvey (id={self.survey_id})"
+        return f"QualtricsSurvey (id={self.survey_id}, {len(self.questions)} questions)"
 
     @cached_property
     def debriefing_question(self):

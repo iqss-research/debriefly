@@ -4,6 +4,7 @@ from requests_oauth2client import OAuth2Client, OAuth2ClientCredentialsAuth
 
 from debriefly import config
 from debriefly.qualtrics.request import QualtricsRequest
+from debriefly.openai import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class QualtricsSession:
         self.data_center = data_center or os.getenv("Q_DATA_CENTER")
         assert self.data_center, "data_center is required"
         self.api_token = api_token or os.getenv("Q_API_TOKEN")
-        self.openai_client = openai_client
+        self.openai_client = openai_client or get_client()
 
         if not self.api_token:
             client_id = client_id or os.getenv("Q_CLIENT_ID")

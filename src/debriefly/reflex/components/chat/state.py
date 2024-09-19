@@ -1,136 +1,144 @@
-import os
+import json
 import reflex as rx
-from openai import OpenAI
+from sqlmodel import select
+from jinja2 import Environment, PackageLoader, select_autoescape
+import logging
+from debriefly.openai import get_client
+from debriefly.reflex.backend.backend import State as BackendState
+from debriefly.reflex.backend.models import Question, Answer
 
 
-# Checking if the API key is set properly
-if not os.getenv("OPENAI_API_KEY"):
-    raise Exception("Please set OPENAI_API_KEY environment variable.")
+logger = logging.getLogger(__name__)
 
 
 class QA(rx.Base):
-    """A question and answer pair."""
-
     question: str
     answer: str
 
 
-DEFAULT_CHATS = {
-    "Intros": [],
-}
-
-
-class State(rx.State):
-    """The app state."""
-
-    # A dict from the chat name to the list of questions and answers.
-    chats: dict[str, list[QA]] = DEFAULT_CHATS
-
-    # The current chat name.
-    current_chat = "Intros"
-
-    # The current question.
+class State(BackendState):
+    answer_id: int
+    question_id: int
+    chat: list[QA]
     question: str
-
-    # Whether we are processing the question.
     processing: bool = False
+    done: bool = False
+    system_message: str
+    initial_message: str
 
-    # The name of the new chat.
-    new_chat_name: str = ""
+    def load_survey_answer(self, answer_id):
+        logger.info(f"Loading survey answer {answer_id}")
+        self.answer_id = answer_id
+        with rx.session() as session:
+            answer = session.exec(select(Answer).where(Answer.id == answer_id)).first()
+            if answer is not None:
+                question = session.exec(
+                    select(Question).where(Question.id == answer.question_id)
+                ).first()
+                logger.info(f"Setting question id {question.id}")
+                self.question_id = question.id
 
-    def create_chat(self):
-        """Create a new chat."""
-        # Add the new chat to the list of chats.
-        self.current_chat = self.new_chat_name
-        self.chats[self.new_chat_name] = []
+                kwargs = {
+                    "question": question.question_text,
+                    "response": answer.answer,
+                    "end_of_survey_token": "<end_of_survey>",
+                }
+                env = Environment(
+                    loader=PackageLoader("debriefly.data.templates", package_path=""),
+                    autoescape=select_autoescape(),
+                )
 
-    def delete_chat(self):
-        """Delete the current chat."""
-        del self.chats[self.current_chat]
-        if len(self.chats) == 0:
-            self.chats = DEFAULT_CHATS
-        self.current_chat = list(self.chats.keys())[0]
+                self.system_message = env.get_template("system_message.jinja").render(
+                    **kwargs
+                )
+                self.initial_message = env.get_template("initial_message.jinja").render(
+                    **kwargs
+                )
+                self.chat = [QA(question="", answer=self.initial_message)]
 
-    def set_chat(self, chat_name: str):
-        """Set the name of the current chat.
-
-        Args:
-            chat_name: The name of the chat.
-        """
-        self.current_chat = chat_name
-
-    @rx.var
-    def chat_titles(self) -> list[str]:
-        """Get the list of chat titles.
-
-        Returns:
-            The list of chat names.
-        """
-        return list(self.chats.keys())
+    def on_load(self):
+        self.load_survey_answer(self.router.page.params.get("answer_id"))
 
     async def process_question(self, form_data: dict[str, str]):
-        # Get the question from the form
         question = form_data["question"]
-
-        # Check if the question is empty
         if question == "":
             return
 
         model = self.openai_process_question
-
         async for value in model(question):
             yield value
 
     async def openai_process_question(self, question: str):
-        """Get the response from the API.
 
-        Args:
-            form_data: A dict with the current question.
-        """
+        client = get_client(
+            initial_message=self.initial_message,
+            system_message=self.system_message,
+            api_key=self.config["AZURE_OPENAI_API_KEY"],
+        )
 
         # Add the question to the list of questions.
         qa = QA(question=question, answer="")
-        self.chats[self.current_chat].append(qa)
+        self.chat.append(qa)
 
         # Clear the input and start the processing.
         self.processing = True
         yield
 
-        # Build the messages.
         messages = [
             {
                 "role": "system",
-                "content": "You are a friendly chatbot named Reflex. Respond in markdown.",
-            }
+                "content": client.system_message,
+            },
+            {
+                "role": "assistant",
+                "content": client.initial_message,
+            },
         ]
-        for qa in self.chats[self.current_chat]:
+        for qa in self.chat[1:]:
             messages.append({"role": "user", "content": qa.question})
             messages.append({"role": "assistant", "content": qa.answer})
 
         # Remove the last mock answer.
         messages = messages[:-1]
 
-        # Start a new session to answer the question.
-        session = OpenAI().chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+        session = client.client.chat.completions.create(
+            model=client.model,
             messages=messages,
+            temperature=client.temperature,
             stream=True,
         )
 
         # Stream the results, yielding after every word.
         for item in session:
+            if len(item.choices) == 0:
+                continue
             if hasattr(item.choices[0].delta, "content"):
                 answer_text = item.choices[0].delta.content
                 # Ensure answer_text is not None before concatenation
                 if answer_text is not None:
-                    self.chats[self.current_chat][-1].answer += answer_text
+                    self.chat[-1].answer += answer_text
                 else:
                     # Handle the case where answer_text is None, perhaps log it or assign a default value
                     # For example, assigning an empty string if answer_text is None
                     answer_text = ""
-                    self.chats[self.current_chat][-1].answer += answer_text
-                self.chats = self.chats
+                    self.chat[-1].answer += answer_text
+                self.chat = self.chat
                 yield
+
+        if client.end_token in self.chat[-1].answer:
+            self.done = True
+            self.chat[-1].answer = self.chat[-1].answer.replace(client.end_token, "")
+
+            with rx.session() as session:
+                answer = session.exec(
+                    select(Answer).where(Answer.id == self.answer_id)
+                ).first()
+
+                # filter out any system messages and save to db
+                messages = [msg for msg in messages if msg["role"] != "system"]
+                answer.debriefing = json.dumps(messages)
+                session.add(answer)
+                session.commit()
 
         # Toggle the processing flag.
         self.processing = False
