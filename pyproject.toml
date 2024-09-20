@@ -17,6 +17,10 @@ classifiers = [
 ]
 
 dependencies = [
+    "azure==4.0.0",
+    "azure-search",
+    "azure-search-documents",
+    "bertopic",
     "fastapi",
     "jinja2",
     "openai",

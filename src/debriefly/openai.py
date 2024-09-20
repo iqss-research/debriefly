@@ -7,6 +7,14 @@ from rich.live import Live
 import time
 from openai import OpenAI, AzureOpenAI
 
+from azure.core.credentials import AzureKeyCredential
+from azure.search.documents import SearchClient
+from azure.search.documents.indexes import SearchIndexClient
+from azure.search.documents.indexes.models import (
+    SearchIndex,
+    SearchField,
+    SearchFieldDataType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +65,7 @@ class Client:
         else:
             raise ValueError("No OpenAI client found")
 
-    def complete(self, user_input, chat_history):
+    def complete(self, user_input, chat_history, stream=True, extra_body=None):
         messages = [{"role": "system", "content": self.system_message}]
         for human_input, assistant_response in chat_history:
             if human_input is not None:
@@ -69,14 +77,18 @@ class Client:
             model=self.model,
             messages=messages,
             temperature=self.temperature,
-            stream=True,
+            stream=stream,
+            extra_body=extra_body,
         )
 
-        for chunk in response:
-            if chunk.choices:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    yield delta
+        if stream:
+            for chunk in response:
+                if chunk.choices:
+                    delta = chunk.choices[0].delta.content
+                    if delta:
+                        yield delta
+        else:
+            yield response.choices[0].message.content
 
     def interactive_chat(self, delay=0.05) -> str:
         console = Console()
@@ -105,6 +117,90 @@ class Client:
             ["\n".join([str(x[0]), str(x[1])]) for x in chat_history]
         )
         return transcript
+
+
+class AzureOpenAISearch:
+    """
+    A class that encapsulates the Azure OpenAI and Azure Search functionalities (semantic search and RAG: retrieved-augmented generation).
+    """
+
+    @staticmethod
+    def survey_id_to_index_name(survey_id: str) -> str:
+        """
+        Convert a qualtrics survey id to an Azure Search index name
+        Index name must only contain lowercase letters, digits or dashes,
+        cannot start or end with dashes and is limited to 128 characters.
+        """
+        index_name = survey_id.lower().replace("_", "-")[:128]
+        logger.debug(f"Converted {survey_id=} to {index_name=}")
+        return index_name
+
+    def __init__(self, index_name):
+        self.openai_client = Client()
+
+        self.index_name = index_name
+        self.search_index = SearchIndex(
+            name=self.index_name,
+            fields=[
+                SearchField(name="id", type=SearchFieldDataType.String, key=True),
+                SearchField(name="content", type=SearchFieldDataType.String),
+            ],
+        )
+
+        self.admin_key = os.getenv("AZURE_OPENAI_SEARCH_KEY")
+        self.credential = AzureKeyCredential(self.admin_key)
+
+        self.azure_search_service_endpoint = os.getenv("AZURE_OPENAI_SEARCH_ENDPOINT")
+        self.search_index_client = SearchIndexClient(
+            endpoint=self.azure_search_service_endpoint,
+            index_name=self.index_name,
+            credential=self.credential,
+        )
+        self.search_client = SearchClient(
+            endpoint=self.azure_search_service_endpoint,
+            index_name=self.index_name,
+            credential=self.credential,
+        )
+
+    def upload(self, documents: list[str]):
+        """
+        Upload documents to the Azure Search database
+        """
+        self.search_index_client.create_or_update_index(self.search_index)
+
+        # Upload your list of strings to the index
+        docs = [
+            {"id": str(i), "content": content} for i, content in enumerate(documents)
+        ]
+        self.search_client.upload_documents(docs)
+
+    def rag(self, query: str):
+        extra_body = {
+            "data_sources": [
+                {
+                    "type": "azure_search",
+                    "parameters": {
+                        "endpoint": self.azure_search_service_endpoint,
+                        "index_name": self.index_name,
+                        "authentication": {
+                            "type": "api_key",
+                            "key": self.admin_key,
+                        },
+                    },
+                }
+            ],
+        }
+        gen = self.openai_client.complete(
+            user_input=query, chat_history=[], stream=False, extra_body=extra_body
+        )
+        # We get a generator with a single response back - consume it and return to caller
+        result = list(gen)[0]
+
+        return result
+
+    def delete_index(self):
+        logger.info(f"Deleting index {self.index_name}")
+        self.search_index_client.delete_index(self.search_index)
 
 
 @cache

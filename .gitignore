@@ -13,3 +13,7 @@ __pycache__
 __pycache__/
 assets/external/
 src/debriefly/_version.py
+
+#added by Kentaro (for development in his environment)
+.venv
+.vscode/*
