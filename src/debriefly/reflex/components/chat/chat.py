@@ -1,6 +1,6 @@
 import reflex as rx
 from debriefly.reflex.components.chat.loading_icon import loading_icon
-from debriefly.reflex.components.chat.state import QA, State
+from debriefly.reflex.components.chat.state import QA, ChatState
 
 
 message_style = dict(
@@ -42,7 +42,7 @@ def message(qa: QA) -> rx.Component:
 
 def chat() -> rx.Component:
     return rx.vstack(
-        rx.box(rx.foreach(State.chat, message), width="100%"),
+        rx.box(rx.foreach(ChatState.chat, message), width="100%"),
         py="8",
         flex="1",
         width="100%",
@@ -71,10 +71,10 @@ def action_bar() -> rx.Component:
                             width=["15em", "20em", "45em", "50em", "50em", "50em"],
                         ),
                         rx.cond(
-                            ~State.done,
+                            ~ChatState.done,
                             rx.button(
                                 rx.cond(
-                                    State.processing,
+                                    ChatState.processing,
                                     loading_icon(height="1em"),
                                     rx.text("Send"),
                                 ),
@@ -83,9 +83,9 @@ def action_bar() -> rx.Component:
                         ),
                         align_items="center",
                     ),
-                    is_disabled=State.processing,
+                    is_disabled=ChatState.processing,
                 ),
-                on_submit=State.process_question,
+                on_submit=ChatState.process_question,
                 reset_on_submit=True,
             ),
             align_items="center",
@@ -106,7 +106,7 @@ def action_bar() -> rx.Component:
 def title_bar() -> rx.Component:
     return rx.flex(
         rx.text(
-            f"Debriefing (answer {State.answer_id})",
+            f"Debriefing (answer {ChatState.answer_id})",
             size="4xl",
         ),
         width="100%",

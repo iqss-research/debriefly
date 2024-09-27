@@ -20,18 +20,16 @@ def index() -> rx.Component:
     return question_table()
 
 
-@template(
-    route="/answers/[question_id]", title="Answers", on_load=[AnswerState.load_entries]
-)
+@template(route="/answers/[q_id]", title="Answers", on_load=[AnswerState.load_entries])
 def answers() -> rx.Component:
     return answer_table()
 
 
-@template(route="/analyze/[question_id]", title="Answer")
+@template(route="/analyze/[q_id]", title="Answer")
 def analyze() -> rx.Component:
     return analyze_main()
 
 
-@template(route="/answer/[answer_id]", title="Answer", on_load=[AnswerState2.on_load])
+@template(route="/answer/[a_id]", title="Answer", on_load=[AnswerState2.on_load])
 def answer() -> rx.Component:
     return answer_main()

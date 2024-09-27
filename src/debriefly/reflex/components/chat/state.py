@@ -16,7 +16,7 @@ class QA(rx.Base):
     answer: str
 
 
-class State(BackendState):
+class ChatState(BackendState):
     answer_id: int
     question_id: int
     chat: list[QA]
@@ -57,7 +57,7 @@ class State(BackendState):
                 self.chat = [QA(question="", answer=self.initial_message)]
 
     def on_load(self):
-        self.load_survey_answer(self.router.page.params.get("answer_id"))
+        self.load_survey_answer(self.router.page.params.get("a_id"))
 
     async def process_question(self, form_data: dict[str, str]):
         question = form_data["question"]

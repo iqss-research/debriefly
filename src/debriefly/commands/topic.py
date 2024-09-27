@@ -1,7 +1,6 @@
+import sys
 import logging
 from debriefly.qualtrics import QualtricsSession, QualtricsSurvey
-from bertopic import BERTopic
-from bertopic.representation import KeyBERTInspired
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +23,15 @@ def do_topic(transcripts: list, output_file: str):
 
     """
     logger.info("Fitting topic model with BERTopic...")
+
+    try:
+        from bertopic import BERTopic
+        from bertopic.representation import KeyBERTInspired
+    except ImportError:
+        logger.error(
+            "BERTopic is not installed. Please install it with `pip install bertopic`"
+        )
+        sys.exit(1)
 
     # fitting topic model
     representation_model = KeyBERTInspired()
