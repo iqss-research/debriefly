@@ -10,9 +10,7 @@ reflex-clerk@git+https://github.com/vineetbansal/reflex-clerk.git
 authlib
 psycopg2-binary
 pyyaml
-
-#required for the analyses components
-bertopic
 azure==4.0.0
 azure-search
 azure-search-documents
+numpy

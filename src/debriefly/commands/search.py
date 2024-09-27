@@ -1,8 +1,8 @@
+import sys
 import logging
 import csv
 import numpy as np
 from debriefly.qualtrics import QualtricsSession, QualtricsSurvey
-from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,14 @@ def do_search(transcripts: list, output_file: str, query: str):
     """
 
     logger.info("Searching transcripts")
+
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        logger.error(
+            "sentence-transformers is not installed. Please install it with `pip install sentence-transformers`"
+        )
+        sys.exit(1)
 
     with open(output_file, "w") as csvfile:
         csv_writer = csv.writer(csvfile)

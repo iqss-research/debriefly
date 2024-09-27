@@ -1,4 +1,5 @@
 # version file (managed by setuptools-scm)
+#added by Kentaro (for development in his environment)
 *.db
 *.egg-info
 *.py[cod]
@@ -7,13 +8,11 @@
 .env
 .idea
 .pytest_cache
+.venv
+.vscode/*
 .web
 /build/
 __pycache__
 __pycache__/
 assets/external/
 src/debriefly/_version.py
-
-#added by Kentaro (for development in his environment)
-.venv
-.vscode/*

@@ -159,7 +159,7 @@ class AnswerState(rx.State):
     sort_reverse: bool = False
 
     def load_entries(self) -> list[Answer]:
-        self.question_id = self.router.page.params.get("question_id")
+        self.question_id = self.router.page.params.get("q_id")
         with rx.session() as session:
             query = select(Answer).where(Answer.question_id == self.question_id)
             if self.search_value:

@@ -12,7 +12,7 @@ class State(clerk.ClerkState):
     messages: list[dict[str, str]] = []
 
     def on_load(self):
-        answer_id = self.router.page.params.get("answer_id")
+        answer_id = self.router.page.params.get("a_id")
         with rx.session() as session:
             answer = session.exec(select(Answer).where(Answer.id == answer_id)).first()
             self.valid = answer is not None and answer.question.user_id == self.user_id

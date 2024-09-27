@@ -24,7 +24,7 @@ def serialize_qualtricsquestion(value: QualtricsQuestion) -> str:
     return format.json_dumps({value.question_id: value.question_text})
 
 
-class State(rx.State):
+class SurveyState(rx.State):
 
     survey_id: str = ""
     questions: list[str] = []
@@ -47,7 +47,7 @@ class State(rx.State):
                 self.answers = [""] * self.total_questions
 
     def on_load(self):
-        self.load_survey(self.router.page.params.get("survey_id"))
+        self.load_survey(self.router.page.params.get("s_id"))
 
     async def submit(self):
         state = await self.get_state(clerk.ClerkState)
@@ -70,32 +70,32 @@ class State(rx.State):
             return rx.redirect(f"/chat/{self.debriefing_answer_id}")
 
 
-@template(route="/survey/[survey_id]", title="Survey", on_load=State.on_load)
+@template(route="/survey/[s_id]", title="Survey", on_load=SurveyState.on_load)
 def survey() -> rx.Component:
     return rx.vstack(
-        rx.heading(f"Survey {State.survey_id}"),
-        rx.text(State.questions[State.current_question]),
+        rx.heading(f"Survey {SurveyState.survey_id}"),
+        rx.text(SurveyState.questions[SurveyState.current_question]),
         rx.text_area(
-            on_change=State.set_current_answer,
-            value=State.current_answer,
+            on_change=SurveyState.set_current_answer,
+            value=SurveyState.current_answer,
             width="100%",
             rows="10",
         ),
         rx.button(
             rx.cond(
-                State.current_question == State.total_questions - 1,
+                SurveyState.current_question == SurveyState.total_questions - 1,
                 "Submit",
                 "Next",
             ),
             color_scheme="grass",
-            on_click=lambda: State.next_question(),
+            on_click=lambda: SurveyState.next_question(),
         ),
         width="100%",
     )
 
 
-@template(route="/survey_chat/[survey_id]", title="Survey Chat")
+@template(route="/survey_chat/[s_id]", title="Survey Chat")
 def survey_chat() -> rx.Component:
     return rx.vstack(
-        rx.text(f"Survey Chat {State.survey_id}"),
+        rx.text(f"Survey Chat {SurveyState.survey_id}"),
     )
