@@ -12,24 +12,19 @@ message_style = dict(
 
 
 def message(qa: QA) -> rx.Component:
-    """A single question/answer message.
-
-    Args:
-        qa: The question/answer pair.
-
-    Returns:
-        A component displaying the question/answer pair.
-    """
     return rx.box(
-        rx.box(
-            rx.markdown(
-                qa.question,
-                background_color=rx.color("mauve", 4),
-                color=rx.color("mauve", 12),
-                **message_style,
+        rx.cond(
+            qa.question != "",
+            rx.box(
+                rx.markdown(
+                    qa.question,
+                    background_color=rx.color("mauve", 4),
+                    color=rx.color("mauve", 12),
+                    **message_style,
+                ),
+                text_align="right",
+                margin_top="1em",
             ),
-            text_align="right",
-            margin_top="1em",
         ),
         rx.box(
             rx.markdown(
@@ -46,9 +41,8 @@ def message(qa: QA) -> rx.Component:
 
 
 def chat() -> rx.Component:
-    """List all the messages in a single conversation."""
     return rx.vstack(
-        rx.box(rx.foreach(State.chats[State.current_chat], message), width="100%"),
+        rx.box(rx.foreach(State.chat, message), width="100%"),
         py="8",
         flex="1",
         width="100%",
@@ -60,7 +54,6 @@ def chat() -> rx.Component:
 
 
 def action_bar() -> rx.Component:
-    """The action bar to send a new message."""
     return rx.center(
         rx.vstack(
             rx.chakra.form(
@@ -77,13 +70,16 @@ def action_bar() -> rx.Component:
                             id="question",
                             width=["15em", "20em", "45em", "50em", "50em", "50em"],
                         ),
-                        rx.button(
-                            rx.cond(
-                                State.processing,
-                                loading_icon(height="1em"),
-                                rx.text("Send"),
+                        rx.cond(
+                            ~State.done,
+                            rx.button(
+                                rx.cond(
+                                    State.processing,
+                                    loading_icon(height="1em"),
+                                    rx.text("Send"),
+                                ),
+                                type="submit",
                             ),
-                            type="submit",
                         ),
                         align_items="center",
                     ),
@@ -108,9 +104,11 @@ def action_bar() -> rx.Component:
 
 
 def title_bar() -> rx.Component:
-    """The title bar for the chat page."""
     return rx.flex(
-        rx.text("Survey", size="4xl"),
+        rx.text(
+            f"Debriefing (answer {State.answer_id})",
+            size="4xl",
+        ),
         width="100%",
         padding_y="4",
         padding_x="4",

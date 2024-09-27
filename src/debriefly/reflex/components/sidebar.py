@@ -4,6 +4,13 @@ from debriefly import __version__
 from debriefly.reflex import styles
 
 
+pages = [
+    ("Home", "/", "home"),
+    ("Profile", "/profile", "user"),
+    ("Config", "/config", "cog"),
+]
+
+
 def clerk_navbar() -> rx.Component:
     return rx.vstack(
         clerk.signed_out(
@@ -22,20 +29,13 @@ def sidebar_item_icon(icon: str) -> rx.Component:
     return rx.icon(icon, size=18)
 
 
-def sidebar_item(text: str, url: str) -> rx.Component:
+def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
     # Whether the item is active.
-    active = (rx.State.router.page.path == url.lower()) | (
-        (rx.State.router.page.path == "/") & text == "Overview"
-    )
+    active = rx.State.router.page.path == url.lower()
 
     return rx.link(
         rx.hstack(
-            rx.match(
-                text,
-                ("Overview", sidebar_item_icon("home")),
-                ("Profile", sidebar_item_icon("user")),
-                sidebar_item_icon("layout-dashboard"),
-            ),
+            sidebar_item_icon(icon),
             rx.text(text, size="3", weight="regular"),
             color=rx.cond(
                 active,
@@ -75,35 +75,13 @@ def sidebar_item(text: str, url: str) -> rx.Component:
 
 
 def sidebar() -> rx.Component:
-    # Get all the decorated pages and add them to the sidebar.
-    from reflex.page import get_decorated_pages
-
-    # The ordered page routes.
-    ordered_page_routes = ["/", "/profile"]
-
-    # Get the decorated pages.
-    pages = get_decorated_pages()
-
-    # Include all pages even if they are not in the ordered_page_routes.
-    ordered_pages = sorted(
-        pages,
-        key=lambda page: (
-            ordered_page_routes.index(page["route"])
-            if page["route"] in ordered_page_routes
-            else len(ordered_page_routes)
-        ),
-    )
-
     return rx.flex(
         rx.vstack(
             rx.heading("Debriefly", align="left"),
             rx.vstack(
                 *[
-                    sidebar_item(
-                        text=page.get("title", page["route"].strip("/").capitalize()),
-                        url=page["route"],
-                    )
-                    for page in ordered_pages
+                    sidebar_item(text=page[0], url=page[1], icon=page[2])
+                    for page in pages
                 ],
                 spacing="1",
                 width="100%",

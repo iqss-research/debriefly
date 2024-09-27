@@ -70,7 +70,7 @@ class QualtricsQuestionDebriefing(QualtricsQuestion):
 
     def prompt(self, console, delay=0.05) -> str:
         self.survey.populate_system_message(
-            question=self.question,
+            question=self.question.question_text,
             response=self.response,
             end_of_survey_token=self.end_of_survey_token,
         )

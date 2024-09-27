@@ -19,7 +19,7 @@ class QualtricsSurveySession(QualtricsRequest):
         self.process()
 
     def __str__(self):
-        return f"Session {self.session_id} for survey {self.survey.survey_id}"
+        return f"Session {self.session_id} for {self.survey}"
 
     def submit(self, answers=None, embedded_data=None):
         # If no answers are provided (just embedded_data),
