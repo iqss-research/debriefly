@@ -123,7 +123,7 @@ def _show_question(question: Question):
                         rx.icon("link", size=22),
                         # TODO: base url?
                         on_click=rx.set_clipboard(
-                            f"https://debriefly.reflex.run/survey/{question.id}"
+                            f"https://debriefly.net/survey/{question.id}"
                         ),
                         size="2",
                         variant="solid",
