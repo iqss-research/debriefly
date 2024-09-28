@@ -74,6 +74,9 @@ class ChatState(BackendState):
             initial_message=self.initial_message,
             system_message=self.system_message,
             api_key=self.config["AZURE_OPENAI_API_KEY"],
+            api_version=self.config["AZURE_OPENAI_API_VERSION"],
+            api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
+            api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
         )
 
         # Add the question to the list of questions.
