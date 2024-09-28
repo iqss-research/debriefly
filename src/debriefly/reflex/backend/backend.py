@@ -11,20 +11,29 @@ logger = logging.getLogger(__name__)
 
 class State(clerk.ClerkState):
     current_question: Question = Question()
-    questions: list[Question] = []
     search_value: str = ""
     sort_value: str = ""
     sort_reverse: bool = False
 
     profile: Profile = Profile()
     config: dict[str, str] = {}
+    _questions: list[Question] = []
+
+    @rx.var(cache=True)
+    def questions(self) -> list[Question]:
+        logger.info("questions() invoking load_entries")
+        self.load_entries()
+        return self._questions
 
     def load_config(self):
         with rx.session() as session:
             for config in session.exec(select(Config)):
                 self.config[config.name] = config.value
 
-    def load_entries(self) -> list[Question]:
+    def load_entries(self):
+        logger.info("load_entries for user %s", self.user_id)
+        if self.user_id is None:
+            return
         with rx.session() as session:
             query = select(Question).where(Question.user_id == self.user_id)
             if self.search_value:
@@ -33,8 +42,7 @@ class State(clerk.ClerkState):
                     or_(
                         *[
                             getattr(Question, field).ilike(search_value)
-                            for field in Question.get_fields()
-                            if not field.endswith("id")
+                            for field in ["question_text"]
                         ],
                     )
                 )
@@ -51,11 +59,16 @@ class State(clerk.ClerkState):
                     )
                 query = query.order_by(order)
 
-            self.questions = session.exec(query).all()
+            questions = session.exec(query).all()
+            logger.info(f"{len(questions)} questions loaded")
+            self._questions = questions
 
-    def load_profile(self):
+    async def load_profile(self):
+        state = await self.get_state(clerk.ClerkState)
+        self.user_id = state.user_id
         logger.info("Loading Profile")
         if self.user_id is not None:
+            logger.info("User ID = %s", self.user_id)
             with rx.session() as session:
                 profile = session.exec(
                     select(Profile).where(Profile.user_id == self.user_id)
@@ -70,6 +83,8 @@ class State(clerk.ClerkState):
                     ).first()
                 else:
                     self.profile = profile
+        else:
+            logger.info("User ID is None")
 
     def sort_values(self, sort_value: str):
         self.sort_value = sort_value

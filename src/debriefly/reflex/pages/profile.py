@@ -1,10 +1,11 @@
-from ..templates import template
-from ..components.profile_input import profile_input
-from ..backend.backend import State
+from debriefly.reflex.template import template
+from debriefly.reflex.components.profile_input import profile_input
+from debriefly.reflex.backend.backend import State
 import reflex as rx
 
 
-@template(route="/profile", title="Profile")
+@rx.page(route="/profile", title="Profile")
+@template
 def profile() -> rx.Component:
     return rx.vstack(
         rx.flex(

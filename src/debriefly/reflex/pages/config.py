@@ -1,11 +1,12 @@
-from debriefly.reflex.templates import template
+from debriefly.reflex.template import template
 from debriefly.reflex.components.profile_input import profile_input
 from debriefly.reflex.backend.backend import State
 import reflex as rx
 import reflex_clerk as clerk
 
 
-@template(route="/config", title="Configuration")
+@rx.page(route="/config", title="Configuration")
+@template
 def config() -> rx.Component:
     return clerk.protect(
         rx.vstack(

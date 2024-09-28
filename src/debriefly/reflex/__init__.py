@@ -1,6 +1,6 @@
 import reflex as rx
 from debriefly.reflex import styles
-from debriefly.reflex.pages import *  # noqa
+import debriefly.reflex.pages  # noqa
 from debriefly.reflex.backend.backend import State
 
 
