@@ -4,7 +4,7 @@ from sqlmodel import select
 import logging
 from debriefly.reflex.backend.models import Question
 from debriefly.openai import AzureOpenAISearch
-from debriefly.reflex.backend.backend import State as BackendState
+from debriefly.reflex.backend.backend import MainState
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class QA(rx.Base):
     answer: str
 
 
-class State(BackendState):
+class State(MainState):
     question_id: int
     debriefing_transcripts: list[str]
     chat: list[QA]

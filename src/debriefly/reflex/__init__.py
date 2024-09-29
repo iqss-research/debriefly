@@ -1,7 +1,7 @@
 import reflex as rx
 from debriefly.reflex import styles
 import debriefly.reflex.pages  # noqa
-from debriefly.reflex.backend.backend import State
+from debriefly.reflex.backend.backend import MainState
 
 
 app = rx.App(
@@ -9,5 +9,5 @@ app = rx.App(
     stylesheets=styles.base_stylesheets,
     title="Debriefly",
     description="Debriefing App for Qualtrics",
-    onload=State.load_entries,
+    onload=MainState.init,
 )
