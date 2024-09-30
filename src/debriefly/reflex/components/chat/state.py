@@ -4,7 +4,7 @@ from sqlmodel import select
 from jinja2 import Environment, PackageLoader, select_autoescape
 import logging
 from debriefly.openai import get_client
-from debriefly.reflex.backend.backend import State as BackendState
+from debriefly.reflex.backend.backend import MainState
 from debriefly.reflex.backend.models import Question, Answer
 
 
@@ -16,7 +16,7 @@ class QA(rx.Base):
     answer: str
 
 
-class ChatState(BackendState):
+class ChatState(MainState):
     answer_id: int
     question_id: int
     chat: list[QA]

@@ -1,8 +1,8 @@
-from .session import QualtricsSession
-from .question import QualtricsQuestion
-from .survey import QualtricsSurveyCreator, QualtricsSurvey
-from .request import QualtricsRequest
-from .survey_session import QualtricsSurveySession
+from debriefly.qualtrics.session import QualtricsSession
+from debriefly.qualtrics.question import QualtricsQuestion
+from debriefly.qualtrics.survey import QualtricsSurveyCreator, QualtricsSurvey
+from debriefly.qualtrics.request import QualtricsRequest
+from debriefly.qualtrics.survey_session import QualtricsSurveySession
 
 
 __all__ = [

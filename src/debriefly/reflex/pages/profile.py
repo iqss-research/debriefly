@@ -1,10 +1,11 @@
-from ..templates import template
-from ..components.profile_input import profile_input
-from ..backend.backend import State
+from debriefly.reflex.template import template
+from debriefly.reflex.components.profile_input import profile_input
+from debriefly.reflex.backend.backend import MainState
 import reflex as rx
 
 
-@template(route="/profile", title="Profile")
+@rx.page(route="/profile", title="Profile")
+@template
 def profile() -> rx.Component:
     return rx.vstack(
         rx.flex(
@@ -25,7 +26,7 @@ def profile() -> rx.Component:
                         "",
                         "text",
                         "braces",
-                        State.profile.qualtrics_api_token,
+                        MainState.profile.qualtrics_api_token,
                     ),
                     profile_input(
                         "Qualtrics Client ID",
@@ -33,7 +34,7 @@ def profile() -> rx.Component:
                         "",
                         "text",
                         "user",
-                        State.profile.qualtrics_client_id,
+                        MainState.profile.qualtrics_client_id,
                     ),
                     profile_input(
                         "Qualtrics Client Secret",
@@ -41,7 +42,7 @@ def profile() -> rx.Component:
                         "",
                         "text",
                         "key-round",
-                        State.profile.qualtrics_client_secret,
+                        MainState.profile.qualtrics_client_secret,
                     ),
                     profile_input(
                         "Qualtrics Data Center",
@@ -49,13 +50,13 @@ def profile() -> rx.Component:
                         "",
                         "text",
                         "server",
-                        State.profile.qualtrics_data_center,
+                        MainState.profile.qualtrics_data_center,
                     ),
                     rx.button("Update", type="submit", width="100%"),
                     width="100%",
                     spacing="5",
                 ),
-                on_submit=State.update_profile,
+                on_submit=MainState.update_profile,
                 reset_on_submit=True,
                 width="100%",
                 max_width="325px",

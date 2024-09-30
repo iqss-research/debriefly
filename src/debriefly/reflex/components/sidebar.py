@@ -6,6 +6,7 @@ from debriefly.reflex import styles
 
 pages = [
     ("Home", "/", "home"),
+    ("Questions", "/questions", "cog"),
     ("Profile", "/profile", "user"),
     ("Config", "/config", "cog"),
 ]

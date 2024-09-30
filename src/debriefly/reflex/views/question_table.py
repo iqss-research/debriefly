@@ -1,5 +1,5 @@
 import reflex as rx
-from debriefly.reflex.backend.backend import State
+from debriefly.reflex.backend.backend import MainState
 from debriefly.reflex.backend.models import Question
 from debriefly.reflex.components.analyze.state import State as AnalyzeState
 from debriefly.reflex.components.form_field import form_field
@@ -88,7 +88,7 @@ def _add_question_button() -> rx.Component:
                         mt="4",
                         justify="end",
                     ),
-                    on_submit=State.add_question_to_db,
+                    on_submit=MainState.add_question_to_db,
                     reset_on_submit=False,
                 ),
                 width="100%",
@@ -153,7 +153,7 @@ def _show_question(question: Question):
                             ),
                             rx.alert_dialog.action(
                                 rx.button("Create"),
-                                on_click=State.create_qualtrics_survey(question),
+                                on_click=MainState.create_qualtrics_survey(question),
                             ),
                             spacing="3",
                         ),
@@ -197,7 +197,7 @@ def _show_question(question: Question):
                             ),
                             rx.alert_dialog.action(
                                 rx.button("Delete"),
-                                on_click=lambda: State.delete_question(
+                                on_click=lambda: MainState.delete_question(
                                     getattr(question, "id")
                                 ),
                             ),
@@ -222,7 +222,7 @@ def _update_question_dialog(question):
                     color_scheme="green",
                     size="2",
                     variant="solid",
-                    on_click=lambda: State.get_question(question),
+                    on_click=lambda: MainState.get_question(question),
                 )
             ),
             content="Edit question",
@@ -291,7 +291,7 @@ def _update_question_dialog(question):
                         mt="4",
                         justify="end",
                     ),
-                    on_submit=State.update_question_to_db,
+                    on_submit=MainState.update_question_to_db,
                     reset_on_submit=False,
                 ),
                 width="100%",
@@ -313,27 +313,27 @@ def main_table():
                 _add_question_button(),
                 rx.spacer(),
                 rx.cond(
-                    State.sort_reverse,
+                    MainState.sort_reverse,
                     rx.icon(
                         "arrow-down-z-a",
                         size=28,
                         stroke_width=1.5,
                         cursor="pointer",
-                        on_click=State.toggle_sort,
+                        on_click=MainState.toggle_sort,
                     ),
                     rx.icon(
                         "arrow-down-a-z",
                         size=28,
                         stroke_width=1.5,
                         cursor="pointer",
-                        on_click=State.toggle_sort,
+                        on_click=MainState.toggle_sort,
                     ),
                 ),
                 rx.select(
                     ["id", "question_text"],
                     placeholder="Sort By: ID",
                     size="3",
-                    on_change=lambda sort_value: State.sort_values(sort_value),
+                    on_change=lambda sort_value: MainState.sort_values(sort_value),
                 ),
                 rx.input(
                     rx.input.slot(rx.icon("search")),
@@ -342,7 +342,7 @@ def main_table():
                     max_width="225px",
                     width="100%",
                     variant="surface",
-                    on_change=lambda value: State.filter_values(value),
+                    on_change=lambda value: MainState.filter_values(value),
                 ),
             ),
             rx.table.root(
@@ -355,7 +355,7 @@ def main_table():
                         _header_cell("Actions", "cog"),
                     ),
                 ),
-                rx.table.body(rx.foreach(State.questions, _show_question)),
+                rx.table.body(rx.foreach(MainState.questions, _show_question)),
                 variant="surface",
                 size="3",
                 width="100%",

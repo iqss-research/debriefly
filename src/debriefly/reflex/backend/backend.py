@@ -9,23 +9,65 @@ from debriefly.qualtrics import QualtricsSession, QualtricsSurveyCreator
 logger = logging.getLogger(__name__)
 
 
-class State(clerk.ClerkState):
+class MainState(rx.State):
+    _user_id: str = ""
     current_question: Question = Question()
-    questions: list[Question] = []
     search_value: str = ""
     sort_value: str = ""
     sort_reverse: bool = False
 
     profile: Profile = Profile()
     config: dict[str, str] = {}
+    _questions: list[Question] = []
 
-    def load_config(self):
+    async def init(self):
+        await self.load_config()
+        await self.load_profile()
+
+    @rx.var(cache=True)
+    def user_id(self) -> str:
+        return self._user_id
+
+    @rx.var(cache=True)
+    def questions(self) -> list[Question]:
+        self.load_entries()
+        return self._questions
+
+    async def load_config(self):
         with rx.session() as session:
             for config in session.exec(select(Config)):
                 self.config[config.name] = config.value
 
-    def load_entries(self) -> list[Question]:
+    async def load_profile(self):
+        state = await self.get_state(clerk.ClerkState)
+        if state.user_id is None:
+            # user_id not (yet) available from clerk
+            # this does happen when on_load is finished before ClerkState
+            # has the user_id loaded. In this case, do nothing.
+            return
+        self._user_id = state.user_id
+
         with rx.session() as session:
+            profile = session.exec(
+                select(Profile).where(Profile.user_id == self.user_id)
+            ).first()
+            if profile is None:
+                logger.info(f"Saving profile for user {self.user_id}")
+                profile = Profile(user_id=self.user_id)
+                session.add(profile)
+                session.commit()
+                self.profile = session.exec(
+                    select(Profile).where(Profile.user_id == self.user_id)
+                ).first()
+            else:
+                self.profile = profile
+
+    def load_entries(self):
+        if self.user_id == "":
+            logger.info("Not loading entries, user_id not available yet")
+            return
+        with rx.session() as session:
+            logger.info(f"Loading entries for user {self.user_id}")
             query = select(Question).where(Question.user_id == self.user_id)
             if self.search_value:
                 search_value = f"%{str(self.search_value).lower()}%"
@@ -33,8 +75,7 @@ class State(clerk.ClerkState):
                     or_(
                         *[
                             getattr(Question, field).ilike(search_value)
-                            for field in Question.get_fields()
-                            if not field.endswith("id")
+                            for field in ["question_text"]
                         ],
                     )
                 )
@@ -51,25 +92,8 @@ class State(clerk.ClerkState):
                     )
                 query = query.order_by(order)
 
-            self.questions = session.exec(query).all()
-
-    def load_profile(self):
-        logger.info("Loading Profile")
-        if self.user_id is not None:
-            with rx.session() as session:
-                profile = session.exec(
-                    select(Profile).where(Profile.user_id == self.user_id)
-                ).first()
-                if profile is None:
-                    logger.info(f"Saving profile for user {self.user_id}")
-                    profile = Profile(user_id=self.user_id)
-                    session.add(profile)
-                    session.commit()
-                    self.profile = session.exec(
-                        select(Profile).where(Profile.user_id == self.user_id)
-                    ).first()
-                else:
-                    self.profile = profile
+            questions = session.exec(query).all()
+            self._questions = questions
 
     def sort_values(self, sort_value: str):
         self.sort_value = sort_value
@@ -124,14 +148,14 @@ class State(clerk.ClerkState):
         csv_data = "id,question_text\n0,foo"
         return rx.download(data=csv_data, filename=f"data_{id}.csv")
 
-    def update_profile(self, form_data: dict):
+    async def update_profile(self, form_data: dict):
         for field in Profile.get_fields():
             if field != "id" and field in form_data:
                 setattr(self.profile, field, form_data[field])
         with rx.session() as session:
             session.add(self.profile)
             session.commit()
-            self.load_profile()
+            await self.load_profile()
         return rx.toast.success("Profile updated successfully")
 
     def create_qualtrics_survey(self, question: Question):
