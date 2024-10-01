@@ -5,10 +5,11 @@ from debriefly.reflex import styles
 
 
 pages = [
-    ("Home", "/", "home"),
-    ("Questions", "/questions", "cog"),
-    ("Profile", "/profile", "user"),
-    ("Config", "/config", "cog"),
+    # (Title, link, icon, clerk permission (if any) or "")
+    ("Home", "/", "home", ""),
+    ("Questions", "/questions", "shield-question", ""),
+    ("Profile", "/profile", "user", ""),
+    ("Config", "/config", "cog", "org:app:admin"),
 ]
 
 
@@ -81,7 +82,14 @@ def sidebar() -> rx.Component:
             rx.heading("Debriefly", align="left"),
             rx.vstack(
                 *[
-                    sidebar_item(text=page[0], url=page[1], icon=page[2])
+                    rx.cond(
+                        pages[3] == "",  # no permission specified
+                        sidebar_item(text=page[0], url=page[1], icon=page[2]),
+                        clerk.protect(
+                            sidebar_item(text=page[0], url=page[1], icon=page[2]),
+                            permission=page[3],
+                        ),
+                    )
                     for page in pages
                 ],
                 spacing="1",
@@ -96,7 +104,7 @@ def sidebar() -> rx.Component:
             height="100dvh",
             padding="1em",
         ),
-        display=["none", "none", "none", "none", "none", "flex"],
+        display=["flex"],
         max_width=styles.sidebar_width,
         width="auto",
         height="100%",

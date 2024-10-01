@@ -10,10 +10,13 @@ from debriefly.reflex.backend.backend import MainState, AnswerState
 load_dotenv()
 
 
-@rx.page(route="/", title="Debriefly", on_load=[])
+@rx.page(route="/", title="Debriefly", on_load=[MainState.init])
 @template
 def index() -> rx.Component:
-    return rx.text("main page here")
+    return rx.vstack(
+        rx.heading("Welcome to Debriefly"),
+        rx.text("This is an app under constuction.."),
+    )
 
 
 @rx.page(

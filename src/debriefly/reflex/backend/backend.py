@@ -21,6 +21,7 @@ class MainState(rx.State):
     _questions: list[Question] = []
 
     async def init(self):
+        logger.info("Initializing MainState")
         await self.load_config()
         await self.load_profile()
 
@@ -34,8 +35,10 @@ class MainState(rx.State):
         return self._questions
 
     async def load_config(self):
+        logger.info("Loading config")
         with rx.session() as session:
             for config in session.exec(select(Config)):
+                logger.info("Loading config: %s", config.name)
                 self.config[config.name] = config.value
 
     async def load_profile(self):
@@ -119,6 +122,9 @@ class MainState(rx.State):
             session.commit()
         self.load_entries()
         return rx.toast.info("Question has been added.")
+
+    def update_config(self, form_data: dict):
+        return rx.toast.warning("Saving config not implemented yet")
 
     def update_question_to_db(self, form_data: dict):
         self.current_question.update(form_data)

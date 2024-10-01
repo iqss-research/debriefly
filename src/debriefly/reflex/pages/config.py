@@ -5,7 +5,7 @@ import reflex as rx
 import reflex_clerk as clerk
 
 
-@rx.page(route="/config", title="Configuration")
+@rx.page(route="/config", title="Configuration", on_load=[MainState.init])
 @template
 def config() -> rx.Component:
     return clerk.protect(
@@ -37,7 +37,7 @@ def config() -> rx.Component:
                         width="100%",
                         spacing="5",
                     ),
-                    on_submit=MainState.update_profile,
+                    on_submit=MainState.update_config,
                     reset_on_submit=True,
                     width="100%",
                     max_width="325px",

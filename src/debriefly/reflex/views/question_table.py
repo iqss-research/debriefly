@@ -21,7 +21,7 @@ def _add_question_button() -> rx.Component:
         rx.dialog.trigger(
             rx.button(
                 rx.icon("plus", size=26),
-                rx.text("Add Question", size="4", display=["none", "none", "block"]),
+                rx.text("Add Question", size="4", display=["block"]),
                 size="3",
             ),
         ),
