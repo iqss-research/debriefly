@@ -4,7 +4,7 @@ from debriefly.reflex.backend.backend import MainState
 import reflex as rx
 
 
-@rx.page(route="/profile", title="Profile")
+@rx.page(route="/profile", title="Profile", on_load=[MainState.init])
 @template
 def profile() -> rx.Component:
     return rx.vstack(

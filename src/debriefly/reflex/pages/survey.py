@@ -3,6 +3,7 @@ import reflex_clerk as clerk
 from sqlmodel import select
 from reflex.utils.serializers import serializer
 from debriefly.reflex.template import template
+from debriefly.reflex.backend.backend import MainState
 from debriefly.reflex.backend.models import Question, Answer
 from debriefly.qualtrics import (
     QualtricsRequest,
@@ -70,7 +71,11 @@ class SurveyState(rx.State):
             return rx.redirect(f"/chat/{self.debriefing_answer_id}")
 
 
-@rx.page(route="/survey/[s_id]", title="Survey", on_load=SurveyState.on_load)
+@rx.page(
+    route="/survey/[s_id]",
+    title="Survey",
+    on_load=[MainState.init, SurveyState.on_load],
+)
 @template
 def survey() -> rx.Component:
     return rx.vstack(
@@ -95,7 +100,7 @@ def survey() -> rx.Component:
     )
 
 
-@rx.page(route="/survey_chat/[s_id]", title="Survey Chat")
+@rx.page(route="/survey_chat/[s_id]", title="Survey Chat", on_load=[MainState.init])
 @template
 def survey_chat() -> rx.Component:
     return rx.vstack(
