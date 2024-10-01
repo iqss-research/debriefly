@@ -32,8 +32,10 @@ class State(MainState):
             if question is not None:
                 self.debriefing_transcripts = question.debriefing_transcripts()
 
+                index_name = f"debriefly-q-{question_id}"
+                logger.info(f"Creating index {index_name}")
                 client = AzureOpenAISearch(
-                    index_name="debriefly-temp",
+                    index_name=index_name,
                     api_key=self.config["AZURE_OPENAI_API_KEY"],
                     api_version=self.config["AZURE_OPENAI_API_VERSION"],
                     api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
@@ -75,8 +77,10 @@ class State(MainState):
             messages.append({"role": "assistant", "content": qa.answer})
         messages = messages[:-1]
 
+        index_name = f"debriefly-q-{self.question_id}"
+        logger.info(f"Querying index {index_name}")
         client = AzureOpenAISearch(
-            index_name="debriefly-temp",
+            index_name=index_name,
             api_key=self.config["AZURE_OPENAI_API_KEY"],
             api_version=self.config["AZURE_OPENAI_API_VERSION"],
             api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
