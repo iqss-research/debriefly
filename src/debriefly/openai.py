@@ -243,7 +243,7 @@ def get_client(
             temperature=temperature,
             end_token=end_token,
         )
-    except ValueError:
+    except:  # noqa: E722
         if not missing_ok:
             raise
         return None
