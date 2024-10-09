@@ -1,8 +1,10 @@
-from typing import List, Optional
 from datetime import datetime
-import sqlmodel
-import sqlalchemy as sa
+from typing import Optional
+from sqlmodel import Field
 import reflex as rx
+from enum import Enum as PyEnum
+import sqlmodel
+from reflex.utils.serializers import serializer
 
 
 class Config(rx.Model, table=True):
@@ -11,54 +13,83 @@ class Config(rx.Model, table=True):
     value: str
 
 
-class Profile(rx.Model, table=True):
-    user_id: str = sqlmodel.Field(primary_key=True)
+class User(rx.Model, table=True):
+    user_id: str = Field(primary_key=True)
     qualtrics_api_token: Optional[str] = None
     qualtrics_client_id: Optional[str] = None
     qualtrics_client_secret: Optional[str] = None
     qualtrics_data_center: Optional[str] = None
 
 
-class Question(rx.Model, table=True):
-    user_id: str = sqlmodel.Field(foreign_key="profile.user_id")
-    question_text: str
-    created_on: datetime | None = sqlmodel.Field(
-        default=None,
-        sa_type=sa.DateTime(timezone=True),
-        sa_column_kwargs={"server_default": sa.func.now()},
-        nullable=False,
-    )
-    modified_on: datetime | None = sqlmodel.Field(
-        default=None,
-        sa_type=sa.DateTime(timezone=True),
-        sa_column_kwargs={"onupdate": sa.func.now(), "server_default": sa.func.now()},
-    )
-
-    answers: List["Answer"] = sqlmodel.Relationship(
-        back_populates="question",
-        sa_relationship_kwargs={"lazy": "selectin"},
-        cascade_delete=True,
-    )
-
-    def debriefing_transcripts(self):
-        return [answer.debriefing for answer in self.answers]
+class FieldType(PyEnum):
+    text = "text"
+    checkbox = "checkbox"
+    radio = "radio"
+    textarea = "textarea"
 
 
-class Answer(rx.Model, table=True):
-    user_id: str = sqlmodel.Field(foreign_key="profile.user_id")
-    question_id: int = sqlmodel.Field(foreign_key="question.id")
-    answer: str
-    debriefing: str = None
-    created_on: datetime | None = sqlmodel.Field(
-        default=None,
-        sa_type=sa.DateTime(timezone=True),
-        sa_column_kwargs={"server_default": sa.func.now()},
-        nullable=False,
+@serializer
+def serialize_field_type(value: FieldType) -> str:
+    return value.value
+
+
+class Option(rx.Model, table=True):
+    label: str = ""
+    value: str = ""
+
+    field_id: int = sqlmodel.Field(foreign_key="field.id")
+
+
+class Field(rx.Model, table=True):
+    name: str = ""
+    type_: FieldType = FieldType.text
+    debriefing: bool = False
+    prompt: str = ""
+
+    form_id: int = sqlmodel.Field(foreign_key="form.id")
+    options: list[Option] = sqlmodel.Relationship(
+        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete"},
     )
-    modified_on: datetime | None = sqlmodel.Field(
-        default=None,
-        sa_type=sa.DateTime(timezone=True),
-        sa_column_kwargs={"onupdate": sa.func.now(), "server_default": sa.func.now()},
+    field_values: list["FieldValue"] = sqlmodel.Relationship(
+        back_populates="field",
+        sa_relationship_kwargs={"lazy": "noload", "cascade": "all, delete"},
     )
 
-    question: Optional["Question"] = sqlmodel.Relationship(back_populates="answers")
+
+class Form(rx.Model, table=True):
+    name: str = ""
+    user_id: str = sqlmodel.Field(foreign_key="user.user_id")
+
+    fields: list[Field] = sqlmodel.Relationship(
+        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete"},
+    )
+    responses: list["Response"] = sqlmodel.Relationship(
+        back_populates="form",
+        sa_relationship_kwargs={"cascade": "all, delete"},
+    )
+    user: Optional[User] = sqlmodel.Relationship()
+
+
+class FieldValue(rx.Model, table=True):
+    field_id: int = sqlmodel.Field(foreign_key="field.id")
+    response_id: int = sqlmodel.Field(foreign_key="response.id")
+    value: str
+    debriefing: Optional[str]
+
+    field: Field = sqlmodel.Relationship(sa_relationship_kwargs={"lazy": "selectin"})
+
+
+class Response(rx.Model, table=True):
+    client_token: str
+    form_id: int = sqlmodel.Field(foreign_key="form.id")
+    ts: datetime = sqlmodel.Field(
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime(timezone=True),
+            server_default=sqlmodel.func.now(),
+        ),
+    )
+    form: Form = sqlmodel.Relationship(back_populates="responses")
+
+    field_values: list[FieldValue] = sqlmodel.Relationship(
+        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete"}
+    )

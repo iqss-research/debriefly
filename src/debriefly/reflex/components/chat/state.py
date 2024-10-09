@@ -5,8 +5,8 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 import logging
 from debriefly.openai import get_client
 from debriefly.reflex.backend.backend import MainState
-from debriefly.reflex.backend.models import Question, Answer
-
+from debriefly.reflex.backend.models import Response, FieldValue, Field
+from debriefly.reflex.form_designer.pages.form_entry import FormEntryState
 
 logger = logging.getLogger(__name__)
 
@@ -17,37 +17,68 @@ class QA(rx.Base):
 
 
 class ChatState(MainState):
-    answer_id: int
-    question_id: int
+    client_token: str
+    field_value_ids: list[int]
     chat: list[QA]
-    question: str
     processing: bool = False
     done: bool = False
     system_message: str
     initial_message: str
 
-    def load_survey_answer(self, answer_id):
-        logger.info(f"Loading survey answer {answer_id}")
-        self.answer_id = answer_id
-        with rx.session() as session:
-            answer = session.exec(select(Answer).where(Answer.id == answer_id)).first()
-            if answer is not None:
-                question = session.exec(
-                    select(Question).where(Question.id == answer.question_id)
-                ).first()
-                logger.info(f"Setting question id {question.id}")
-                self.question_id = question.id
+    current_field_value_id: int
 
-                kwargs = {
-                    "question": question.question_text,
-                    "response": answer.answer,
-                    "end_of_survey_token": "<end_of_survey>",
-                }
-                env = Environment(
-                    loader=PackageLoader("debriefly.data.templates", package_path=""),
-                    autoescape=select_autoescape(),
+    async def on_load(self):
+        state = await self.get_state(FormEntryState)
+        self.client_token = state.client_token
+        logger.info(f"Loading debriefing fields for response {self.client_token}")
+        with rx.session() as session:
+            response = session.exec(
+                select(Response).where(Response.client_token == self.client_token)
+            ).first()
+            form = response.form
+
+            debriefing_field_ids = [f.id for f in form.fields if f.debriefing]
+            print(f"{debriefing_field_ids=}")
+            debriefing_field_value_ids = []
+            for field_value in session.exec(
+                select(FieldValue)
+                .where(FieldValue.response_id == response.id)
+                .where(FieldValue.field_id.in_(debriefing_field_ids))
+            ):
+                debriefing_field_value_ids.append(field_value.id)
+            print(f"{debriefing_field_value_ids=}")
+
+            if len(debriefing_field_value_ids) < 1 or len(debriefing_field_ids) < 1:
+                print("No debriefing fields found")
+                return rx.toast.success("Thank you.")
+
+            env = Environment(
+                loader=PackageLoader("debriefly.data.templates", package_path=""),
+                autoescape=select_autoescape(),
+            )
+
+            for field_id, field_value_id in zip(
+                debriefing_field_ids, debriefing_field_value_ids
+            ):
+                self.current_field_value_id = field_value_id
+                debriefing_field_prompt = (
+                    session.exec(select(Field).where(Field.id == field_id))
+                    .first()
+                    .prompt
+                )
+                debriefing_field_value = (
+                    session.exec(
+                        select(FieldValue).where(FieldValue.id == field_value_id)
+                    )
+                    .first()
+                    .value
                 )
 
+                kwargs = {
+                    "question": debriefing_field_prompt,
+                    "response": debriefing_field_value,
+                    "end_of_survey_token": "<end_of_chat>",
+                }
                 self.system_message = env.get_template("system_message.jinja").render(
                     **kwargs
                 )
@@ -56,8 +87,7 @@ class ChatState(MainState):
                 )
                 self.chat = [QA(question="", answer=self.initial_message)]
 
-    def on_load(self):
-        self.load_survey_answer(self.router.page.params.get("a_id"))
+            return rx.toast.success("Debriefing completed. Thank you.")
 
     async def process_question(self, form_data: dict[str, str]):
         question = form_data["question"]
@@ -133,14 +163,16 @@ class ChatState(MainState):
             self.chat[-1].answer = self.chat[-1].answer.replace(client.end_token, "")
 
             with rx.session() as session:
-                answer = session.exec(
-                    select(Answer).where(Answer.id == self.answer_id)
+                field_value = session.exec(
+                    select(FieldValue).where(
+                        FieldValue.id == self.current_field_value_id
+                    )
                 ).first()
 
                 # filter out any system messages and save to db
                 messages = [msg for msg in messages if msg["role"] != "system"]
-                answer.debriefing = json.dumps(messages)
-                session.add(answer)
+                field_value.debriefing = json.dumps(messages)
+                session.add(field_value)
                 session.commit()
 
         # Toggle the processing flag.

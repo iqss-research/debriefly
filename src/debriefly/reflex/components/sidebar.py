@@ -7,8 +7,8 @@ from debriefly.reflex import styles
 pages = [
     # (Title, link, icon, clerk permission (if any) or "")
     ("Home", "/", "home", ""),
-    ("Questions", "/questions", "shield-question", ""),
-    ("Profile", "/profile", "user", ""),
+    ("Surveys", "/edit/form", "shield-question", ""),
+    ("User", "/user", "user", ""),
     ("Config", "/config", "cog", "org:app:admin"),
 ]
 

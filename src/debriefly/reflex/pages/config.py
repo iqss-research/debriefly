@@ -1,5 +1,5 @@
 from debriefly.reflex.template import template
-from debriefly.reflex.components.profile_input import profile_input
+from debriefly.reflex.components.user_input import user_input
 from debriefly.reflex.backend.backend import MainState
 import reflex as rx
 import reflex_clerk as clerk
@@ -24,7 +24,7 @@ def config() -> rx.Component:
                     rx.vstack(
                         rx.foreach(
                             MainState.config,
-                            lambda kv: profile_input(
+                            lambda kv: user_input(
                                 kv[0],
                                 kv[0],
                                 "",

@@ -106,7 +106,7 @@ def action_bar() -> rx.Component:
 def title_bar() -> rx.Component:
     return rx.flex(
         rx.text(
-            f"Debriefing (answer {ChatState.answer_id})",
+            "Debriefing",
             size="4xl",
         ),
         width="100%",

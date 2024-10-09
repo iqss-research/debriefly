@@ -1,12 +1,12 @@
 from debriefly.reflex.template import template
-from debriefly.reflex.components.profile_input import profile_input
+from debriefly.reflex.components.user_input import user_input
 from debriefly.reflex.backend.backend import MainState
 import reflex as rx
 
 
-@rx.page(route="/profile", title="Profile", on_load=[MainState.init])
+@rx.page(route="/user", title="User", on_load=[MainState.init])
 @template
-def profile() -> rx.Component:
+def user() -> rx.Component:
     return rx.vstack(
         rx.flex(
             rx.vstack(
@@ -20,43 +20,43 @@ def profile() -> rx.Component:
             ),
             rx.form.root(
                 rx.vstack(
-                    profile_input(
+                    user_input(
                         "Qualtrics API Token",
                         "qualtrics_api_token",
                         "",
                         "text",
                         "braces",
-                        MainState.profile.qualtrics_api_token,
+                        MainState.user.qualtrics_api_token,
                     ),
-                    profile_input(
+                    user_input(
                         "Qualtrics Client ID",
                         "qualtrics_client_id",
                         "",
                         "text",
                         "user",
-                        MainState.profile.qualtrics_client_id,
+                        MainState.user.qualtrics_client_id,
                     ),
-                    profile_input(
+                    user_input(
                         "Qualtrics Client Secret",
                         "qualtrics_client_secret",
                         "",
                         "text",
                         "key-round",
-                        MainState.profile.qualtrics_client_secret,
+                        MainState.user.qualtrics_client_secret,
                     ),
-                    profile_input(
+                    user_input(
                         "Qualtrics Data Center",
                         "qualtrics_data_center",
                         "",
                         "text",
                         "server",
-                        MainState.profile.qualtrics_data_center,
+                        MainState.user.qualtrics_data_center,
                     ),
                     rx.button("Update", type="submit", width="100%"),
                     width="100%",
                     spacing="5",
                 ),
-                on_submit=MainState.update_profile,
+                on_submit=MainState.update_user,
                 reset_on_submit=True,
                 width="100%",
                 max_width="325px",

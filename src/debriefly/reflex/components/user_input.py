@@ -1,7 +1,7 @@
 import reflex as rx
 
 
-def profile_input(
+def user_input(
     label: str,
     name: str,
     placeholder: str,
