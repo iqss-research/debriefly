@@ -89,6 +89,8 @@ def field_input(field: Field):
                 name=field.name,
             ),
         ),
+        (FieldType.static.value, rx.spacer()),
+        (FieldType.pagebreak.value, rx.divider()),
         rx.input(
             placeholder=field.prompt,
             type=field.type_.to(str),
@@ -103,12 +105,16 @@ def field_prompt(field: Field, show_name: bool = False):
     return rx.cond(
         field,
         rx.cond(
-            field.prompt != "",
-            rx.text(f"{field.prompt}{name}"),
+            field.type_ == FieldType.pagebreak.value,
+            rx.text("---------- break ----------"),
             rx.cond(
-                field.name != "",
-                rx.text(field.name),
-                rx.text("[unnamed field]"),
+                field.prompt != "",
+                rx.text(f"{field.prompt}{name}"),
+                rx.cond(
+                    field.name != "",
+                    rx.text(field.name),
+                    rx.text("[unnamed field]"),
+                ),
             ),
         ),
     )
