@@ -95,7 +95,7 @@ def field_edit_view(field: Field):
                 rx.link(
                     rx.icon(tag="x"), on_click=FormEditorState.delete_field(field.id)
                 ),
-                content="Delete Field",
+                content="Delete Question",
             ),
             margin_bottom="12px",
         ),

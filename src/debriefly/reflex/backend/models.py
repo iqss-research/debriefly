@@ -26,6 +26,8 @@ class FieldType(PyEnum):
     checkbox = "checkbox"
     radio = "radio"
     textarea = "textarea"
+    static = "static"
+    pagebreak = "pagebreak"
 
 
 @serializer

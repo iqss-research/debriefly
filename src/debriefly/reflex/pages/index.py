@@ -13,7 +13,7 @@ load_dotenv()
 def index() -> rx.Component:
     return rx.vstack(
         rx.heading("Welcome to Debriefly"),
-        rx.text("This is an app under constuction.."),
+        rx.text("This is an app under construction.."),
     )
 
 
