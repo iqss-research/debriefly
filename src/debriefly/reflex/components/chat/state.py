@@ -87,8 +87,6 @@ class ChatState(MainState):
                 )
                 self.chat = [QA(question="", answer=self.initial_message)]
 
-            return rx.toast.success("Debriefing completed. Thank you.")
-
     async def process_question(self, form_data: dict[str, str]):
         question = form_data["question"]
         if question == "":
