@@ -102,19 +102,17 @@ def field_input(field: Field):
 
 def field_prompt(field: Field, show_name: bool = False):
     name = f" ({field.name})" if show_name else ""
-    return rx.cond(
-        field,
+    return rx.match(
+        field.type_,
+        (FieldType.static.value, rx.markdown(field.prompt)),
+        (FieldType.pagebreak.value, rx.text("------ break ------")),
         rx.cond(
-            field.type_ == FieldType.pagebreak.value,
-            rx.text("---------- break ----------"),
+            field.prompt != "",
+            rx.text(f"{field.prompt}{name}"),
             rx.cond(
-                field.prompt != "",
-                rx.text(f"{field.prompt}{name}"),
-                rx.cond(
-                    field.name != "",
-                    rx.text(field.name),
-                    rx.text("[unnamed field]"),
-                ),
+                field.name != "",
+                rx.text(field.name),
+                rx.text("[unnamed field]"),
             ),
         ),
     )
@@ -123,7 +121,8 @@ def field_prompt(field: Field, show_name: bool = False):
 def field_view(field: Field):
     return rx.card(
         rx.hstack(
-            field_prompt(field),
+            # https://github.com/reflex-dev/reflex/issues/1655
+            rx.box(field_prompt(field)),
         ),
         rx.hstack(
             field_input(field),

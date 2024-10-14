@@ -1,7 +1,7 @@
 import reflex as rx
 from debriefly.reflex.components.chat.loading_icon import loading_icon
 from debriefly.reflex.components.chat.state import QA, ChatState
-
+from debriefly.reflex.form_designer import style
 
 message_style = dict(
     display="inline-block",
@@ -42,7 +42,10 @@ def message(qa: QA) -> rx.Component:
 
 def chat() -> rx.Component:
     return rx.vstack(
-        rx.box(rx.foreach(ChatState.chat, message), width="100%"),
+        rx.box(
+            rx.foreach(ChatState.chats[ChatState.current_chat_index], message),
+            width="100%",
+        ),
         py="8",
         flex="1",
         width="100%",
@@ -70,16 +73,13 @@ def action_bar() -> rx.Component:
                             id="question",
                             width=["15em", "20em", "45em", "50em", "50em", "50em"],
                         ),
-                        rx.cond(
-                            ~ChatState.done,
-                            rx.button(
-                                rx.cond(
-                                    ChatState.processing,
-                                    loading_icon(height="1em"),
-                                    rx.text("Send"),
-                                ),
-                                type="submit",
+                        rx.button(
+                            rx.cond(
+                                ChatState.processing,
+                                loading_icon(height="1em"),
+                                rx.text("Send"),
                             ),
+                            type="submit",
                         ),
                         align_items="center",
                     ),
@@ -105,9 +105,8 @@ def action_bar() -> rx.Component:
 
 def title_bar() -> rx.Component:
     return rx.flex(
-        rx.text(
+        rx.heading(
             "Debriefing",
-            size="4xl",
         ),
         width="100%",
         padding_y="4",
@@ -119,4 +118,17 @@ def title_bar() -> rx.Component:
 
 
 def chat_ui() -> rx.Component:
-    return rx.vstack(title_bar(), chat(), action_bar())
+    return rx.cond(
+        ChatState.n_chats == 0,
+        rx.text("Loading"),
+        rx.cond(
+            ChatState.current_chat_index >= ChatState.n_chats,
+            style.layout(
+                rx.card(
+                    "Thank you for your responses. Please close this browser window.",
+                    size="5",
+                )
+            ),
+            rx.vstack(title_bar(), chat(), action_bar()),
+        ),
+    )

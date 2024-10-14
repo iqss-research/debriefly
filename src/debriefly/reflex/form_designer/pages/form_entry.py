@@ -27,7 +27,9 @@ class FormEntryState(rx.State):
         with rx.session() as session:
             self.form = session.get(Form, id_)
 
-    def handle_submit(self, form_data):
+    async def handle_submit(self, form_data):
+        tab_state = await self.get_state(FormEntryTabState)
+
         with rx.session() as session:
             response = session.exec(
                 select(Response)
@@ -38,7 +40,20 @@ class FormEntryState(rx.State):
                 response = Response(
                     client_token=self._ensure_client_token(), form_id=self.form.id
                 )
-            for field in self.form.fields:
+
+            # only consider fields that were submitted as part of the tab (page)
+            # note that `active_tab` has already advanced to the next tab
+            for field in tab_state.fields[tab_state.active_tab - 1]:
+
+                # delete any previously-submitted field values
+                field_value = session.exec(
+                    select(FieldValue)
+                    .where(FieldValue.field_id == field.id)
+                    .where(FieldValue.response_id == response.id)
+                ).first()
+                if field_value is not None:
+                    session.delete(field_value)
+
                 value = form_data.get(field.name, Missing)
                 if value is not Missing:
                     response.field_values.append(
@@ -80,11 +95,12 @@ class FormEntryTabState(rx.State):
                 if not key
             ]
             self.n_tabs = len(self.fields)
+        self.active_tab = 0
+        self.is_last_tab = self.n_tabs == 1
 
     async def advance(self):
-        if self.active_tab < self.n_tabs - 1:
-            self.active_tab += 1
-        self.is_last_tab = self.active_tab == self.n_tabs - 1
+        self.active_tab += 1
+        self.is_last_tab = self.active_tab >= self.n_tabs - 1
 
 
 def form_entry_tab(fields: list[Field], i: int):

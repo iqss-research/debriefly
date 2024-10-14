@@ -19,15 +19,17 @@ class QA(rx.Base):
 class ChatState(MainState):
     client_token: str
     field_value_ids: list[int]
-    chat: list[QA]
+    chats: list[list[QA]]
     processing: bool = False
-    done: bool = False
-    system_message: str
-    initial_message: str
+    done: bool = False  # done with current chat
+    system_messages: list[str]
+    initial_messages: list[str]
 
-    current_field_value_id: int
+    current_chat_index: int = 0
+    n_chats: int = 0
 
     async def on_load(self):
+        self.reset()
         state = await self.get_state(FormEntryState)
         self.client_token = state.client_token
         logger.info(f"Loading debriefing fields for response {self.client_token}")
@@ -47,6 +49,7 @@ class ChatState(MainState):
             ):
                 debriefing_field_value_ids.append(field_value.id)
             print(f"{debriefing_field_value_ids=}")
+            self.field_value_ids = debriefing_field_value_ids
 
             if len(debriefing_field_value_ids) < 1 or len(debriefing_field_ids) < 1:
                 print("No debriefing fields found")
@@ -60,7 +63,6 @@ class ChatState(MainState):
             for field_id, field_value_id in zip(
                 debriefing_field_ids, debriefing_field_value_ids
             ):
-                self.current_field_value_id = field_value_id
                 debriefing_field_prompt = (
                     session.exec(select(Field).where(Field.id == field_id))
                     .first()
@@ -79,13 +81,15 @@ class ChatState(MainState):
                     "response": debriefing_field_value,
                     "end_of_survey_token": "<end_of_chat>",
                 }
-                self.system_message = env.get_template("system_message.jinja").render(
-                    **kwargs
+                self.system_messages.append(
+                    env.get_template("system_message.jinja").render(**kwargs)
                 )
-                self.initial_message = env.get_template("initial_message.jinja").render(
-                    **kwargs
+                self.initial_messages.append(
+                    env.get_template("initial_message.jinja").render(**kwargs)
                 )
-                self.chat = [QA(question="", answer=self.initial_message)]
+                chat = [QA(question="", answer=self.initial_messages[self.n_chats])]
+                self.chats.append(chat)
+                self.n_chats += 1
 
     async def process_question(self, form_data: dict[str, str]):
         question = form_data["question"]
@@ -99,8 +103,8 @@ class ChatState(MainState):
     async def openai_process_question(self, question: str):
 
         client = get_client(
-            initial_message=self.initial_message,
-            system_message=self.system_message,
+            initial_message=self.initial_messages[self.current_chat_index],
+            system_message=self.system_messages[self.current_chat_index],
             api_key=self.config["AZURE_OPENAI_API_KEY"],
             api_version=self.config["AZURE_OPENAI_API_VERSION"],
             api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
@@ -109,7 +113,7 @@ class ChatState(MainState):
 
         # Add the question to the list of questions.
         qa = QA(question=question, answer="")
-        self.chat.append(qa)
+        self.chats[self.current_chat_index].append(qa)
 
         # Clear the input and start the processing.
         self.processing = True
@@ -125,7 +129,7 @@ class ChatState(MainState):
                 "content": client.initial_message,
             },
         ]
-        for qa in self.chat[1:]:
+        for qa in self.chats[self.current_chat_index][1:]:
             messages.append({"role": "user", "content": qa.question})
             messages.append({"role": "assistant", "content": qa.answer})
 
@@ -147,23 +151,27 @@ class ChatState(MainState):
                 answer_text = item.choices[0].delta.content
                 # Ensure answer_text is not None before concatenation
                 if answer_text is not None:
-                    self.chat[-1].answer += answer_text
+                    self.chats[self.current_chat_index][-1].answer += answer_text
                 else:
                     # Handle the case where answer_text is None, perhaps log it or assign a default value
                     # For example, assigning an empty string if answer_text is None
                     answer_text = ""
-                    self.chat[-1].answer += answer_text
-                self.chat = self.chat
+                    self.chats[self.current_chat_index][-1].answer += answer_text
+                self.chats[self.current_chat_index] = self.chats[
+                    self.current_chat_index
+                ]
                 yield
 
-        if client.end_token in self.chat[-1].answer:
+        if client.end_token in self.chats[self.current_chat_index][-1].answer:
             self.done = True
-            self.chat[-1].answer = self.chat[-1].answer.replace(client.end_token, "")
+            self.chats[self.current_chat_index][-1].answer = self.chats[
+                self.current_chat_index
+            ][-1].answer.replace(client.end_token, "")
 
             with rx.session() as session:
                 field_value = session.exec(
                     select(FieldValue).where(
-                        FieldValue.id == self.current_field_value_id
+                        FieldValue.id == self.field_value_ids[self.current_chat_index]
                     )
                 ).first()
 
@@ -172,6 +180,8 @@ class ChatState(MainState):
                 field_value.debriefing = json.dumps(messages)
                 session.add(field_value)
                 session.commit()
+
+                self.current_chat_index += 1
 
         # Toggle the processing flag.
         self.processing = False

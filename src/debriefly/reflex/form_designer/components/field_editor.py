@@ -193,12 +193,39 @@ def field_editor_input(key: str):
     )
 
 
+def field_editor_input_prompt(key: str):
+    return rx.el.label(
+        key.capitalize(),
+        rx.match(
+            FieldEditorState.field.type_,
+            (
+                FieldType.static.value,
+                rx.text_area(
+                    placeholder=key.capitalize(),
+                    name=f"field_{key}",
+                    value=getattr(FieldEditorState.field, key),
+                    on_change=lambda v: FieldEditorState.set_field(key, v),
+                    width="100%",
+                ),
+            ),
+            rx.input(
+                placeholder=key.capitalize(),
+                name=f"field_{key}",
+                value=getattr(FieldEditorState.field, key),
+                on_change=lambda v: FieldEditorState.set_field(key, v),
+                width="100%",
+            ),
+        ),
+        width="100%",
+    )
+
+
 def field_editor():
     return rx.fragment(
         rx.form(
             rx.vstack(
                 field_editor_input("name"),
-                field_editor_input("prompt"),
+                field_editor_input_prompt("prompt"),
                 rx.hstack(
                     "Type",
                     rx.select.root(
@@ -222,12 +249,28 @@ def field_editor():
                         ),
                     ),
                     rx.spacer(),
-                    rx.box(
-                        rx.checkbox(
-                            "Debriefing",
-                            name="debriefing",
-                            checked=FieldEditorState.field.debriefing,
-                            on_change=FieldEditorState.handle_debriefing_change,
+                    rx.el.label(
+                        "Ordering",
+                        rx.input(
+                            placeholder="0.0",
+                            name="field_ordering",
+                            value=FieldEditorState.field.ordering,
+                            on_change=lambda v: FieldEditorState.set_field(
+                                "ordering", v
+                            ),
+                            width="100px",
+                        ),
+                    ),
+                    rx.cond(
+                        (FieldEditorState.field.type_ != FieldType.static.value)
+                        & (FieldEditorState.field.type_ != FieldType.pagebreak.value),
+                        rx.box(
+                            rx.checkbox(
+                                "Debriefing",
+                                name="debriefing",
+                                checked=FieldEditorState.field.debriefing,
+                                on_change=FieldEditorState.handle_debriefing_change,
+                            ),
                         ),
                     ),
                     align="center",

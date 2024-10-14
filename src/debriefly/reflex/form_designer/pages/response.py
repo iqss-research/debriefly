@@ -1,13 +1,25 @@
+import json
 import reflex as rx
 from debriefly.reflex.form_designer import constants, routes, style, utils
 from debriefly.reflex.form_designer.components import field_prompt
-from debriefly.reflex.backend.models import Form, Response
+from debriefly.reflex.backend.models import Form, Response, FieldValue
 from debriefly.reflex.backend.backend import MainState as AppState
+
+
+message_style = dict(
+    display="inline-block",
+    padding="1em",
+    border_radius="8px",
+    max_width=["30em", "30em", "50em", "50em", "50em", "50em"],
+)
 
 
 class ResponsesState(AppState):
     form: Form = Form()
     responses: list[Response] = []
+    # { response_id: { field_id: list_of_messages, ... }, ... }
+    # where list_of_messages is a list of dicts with keys "role" and "content"
+    response_debriefings: dict[int, dict[int, list[dict[str, str]]]] = {}
 
     def load_responses(self):
         with rx.session() as session:
@@ -20,6 +32,14 @@ class ResponsesState(AppState):
                 Response.select().where(Response.form_id == self.form_id)
             ).all()
 
+            for response in self.responses:
+                response_debriefings = {}
+                for field_value in response.field_values:
+                    response_debriefings[field_value.field_id] = json.loads(
+                        field_value.debriefing
+                    )
+                self.response_debriefings[response.id] = response_debriefings
+
     def delete_response(self, id: int):
         if not self._user_has_access():
             return
@@ -27,6 +47,39 @@ class ResponsesState(AppState):
             session.delete(session.get(Response, id))
             session.commit()
             return ResponsesState.load_responses
+
+
+def debriefing_transcript(response: Response, field_value: FieldValue):
+    return rx.vstack(
+        rx.foreach(
+            ResponsesState.response_debriefings[response.id][field_value.field_id],
+            lambda message: rx.cond(
+                message["role"] == "assistant",
+                rx.box(
+                    rx.markdown(
+                        message["content"],
+                        background_color=rx.color("accent", 4),
+                        color=rx.color("accent", 12),
+                        **message_style,
+                    ),
+                    text_align="left",
+                    padding_top="1em",
+                    width="100%",
+                ),
+                rx.box(
+                    rx.markdown(
+                        message["content"],
+                        background_color=rx.color("mauve", 4),
+                        color=rx.color("mauve", 12),
+                        **message_style,
+                    ),
+                    text_align="right",
+                    margin_top="1em",
+                    width="100%",
+                ),
+            ),
+        ),
+    )
 
 
 def response_content(response: Response):
@@ -40,6 +93,11 @@ def response_content(response: Response):
                     fv.value != "",
                     rx.text(fv.value),
                     rx.text("No response provided."),
+                ),
+                rx.cond(
+                    fv.field.debriefing,
+                    debriefing_transcript(response, fv),
+                    rx.spacer(),
                 ),
                 align="start",
             ),

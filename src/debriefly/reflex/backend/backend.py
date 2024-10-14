@@ -4,6 +4,7 @@ import logging
 import reflex_clerk as clerk
 from debriefly.reflex.backend.models import Config, User, Form
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,8 +59,16 @@ class MainState(rx.State):
             else:
                 self.user = user
 
-    def update_config(self, form_data: dict):
-        return rx.toast.warning("Saving config not implemented yet")
+    async def update_config(self, form_data: dict):
+        main_state = await self.get_state(MainState)
+        with rx.session() as session:
+            for key, value in form_data.items():
+                config = session.exec(select(Config).where(Config.name == key)).first()
+                if config is not None:
+                    config.value = value
+            session.commit()
+            await main_state.init()
+        return rx.toast.success("Config updated successfully")
 
     async def update_user(self, form_data: dict):
         for field in User.get_fields():

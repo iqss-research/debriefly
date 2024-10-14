@@ -70,6 +70,7 @@ class FormEditorState(AppState):
                         existing_field.type_ = field.type_
                         existing_field.debriefing = field.debriefing
                         existing_field.prompt = field.prompt
+                        existing_field.ordering = field.ordering
                         session.add(existing_field)
                         session.commit()
             return FormEditorState.load_form_by_id(self.form.id)
@@ -110,6 +111,12 @@ def field_edit_view(field: Field):
     )
 
 
+def copy_url():
+    # TODO: Get base url from config
+    url = "https://debriefly.net" + routes.show_form(FormEditorState.form.id)
+    return rx.set_clipboard(url)
+
+
 def form_editor():
     return rx.vstack(
         rx.hstack(
@@ -127,8 +134,9 @@ def form_editor():
                 FormEditorState.form_id != "",
                 rx.hstack(
                     rx.button(
-                        "Preview",
-                        on_click=rx.redirect(routes.show_form(FormEditorState.form.id)),
+                        rx.icon("link"),
+                        "Copy URL",
+                        on_click=copy_url,
                         type="button",
                     ),
                     rx.button(

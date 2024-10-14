@@ -47,6 +47,7 @@ class Field(rx.Model, table=True):
     type_: FieldType = FieldType.text
     debriefing: bool = False
     prompt: str = ""
+    ordering: float = 0.0
 
     form_id: int = sqlmodel.Field(foreign_key="form.id")
     options: list[Option] = sqlmodel.Relationship(
@@ -54,7 +55,10 @@ class Field(rx.Model, table=True):
     )
     field_values: list["FieldValue"] = sqlmodel.Relationship(
         back_populates="field",
-        sa_relationship_kwargs={"lazy": "noload", "cascade": "all, delete"},
+        sa_relationship_kwargs={
+            "lazy": "noload",
+            "cascade": "all, delete, delete-orphan",
+        },
     )
 
 
@@ -63,7 +67,11 @@ class Form(rx.Model, table=True):
     user_id: str = sqlmodel.Field(foreign_key="user.user_id")
 
     fields: list[Field] = sqlmodel.Relationship(
-        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete"},
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete",
+            "order_by": "Field.ordering",
+        },
     )
     responses: list["Response"] = sqlmodel.Relationship(
         back_populates="form",
@@ -82,6 +90,7 @@ class FieldValue(rx.Model, table=True):
 
 
 class Response(rx.Model, table=True):
+    id: int = sqlmodel.Field(primary_key=True)
     client_token: str
     form_id: int = sqlmodel.Field(foreign_key="form.id")
     ts: datetime = sqlmodel.Field(
