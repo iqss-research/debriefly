@@ -35,9 +35,12 @@ class ResponsesState(AppState):
             for response in self.responses:
                 response_debriefings = {}
                 for field_value in response.field_values:
-                    response_debriefings[field_value.field_id] = json.loads(
-                        field_value.debriefing
-                    )
+                    if field_value.debriefing is not None:
+                        response_debriefings[field_value.field_id] = json.loads(
+                            field_value.debriefing
+                        )
+                    else:
+                        response_debriefings[field_value.field_id] = []
                 self.response_debriefings[response.id] = response_debriefings
 
     def delete_response(self, id: int):
