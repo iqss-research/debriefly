@@ -119,15 +119,22 @@ def title_bar() -> rx.Component:
 
 def chat_ui() -> rx.Component:
     return rx.cond(
-        ChatState.n_chats == 0,
-        rx.text("Loading"),
+        ~ChatState.loaded,
+        rx.spinner(),
         rx.cond(
             ChatState.current_chat_index >= ChatState.n_chats,
             style.layout(
                 rx.card(
-                    "Thank you for your responses. Please close this browser window.",
+                    "Thank you for your responses.",
                     size="5",
-                )
+                ),
+                rx.card(
+                    rx.flex(
+                        rx.text("Your submission code is "),
+                        rx.code(ChatState.client_token),
+                    ),
+                    size="5",
+                ),
             ),
             rx.vstack(title_bar(), chat(), action_bar()),
         ),

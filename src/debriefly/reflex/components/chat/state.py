@@ -7,6 +7,7 @@ from debriefly.openai import get_client
 from debriefly.reflex.backend.backend import MainState
 from debriefly.reflex.backend.models import Response, FieldValue, Field
 from debriefly.reflex.form_designer.pages.form_entry import FormEntryState
+from debriefly.reflex.form_designer import routes
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class QA(rx.Base):
 
 
 class ChatState(MainState):
+    loaded: bool = False
     client_token: str
     field_value_ids: list[int]
     chats: list[list[QA]]
@@ -32,10 +34,14 @@ class ChatState(MainState):
         self.reset()
         state = await self.get_state(FormEntryState)
         self.client_token = state.client_token
-        logger.info(f"Loading debriefing fields for response {self.client_token}")
+        logger.info(
+            f"Loading debriefing fields for response {self.client_token} and form {state.form.id}"
+        )
         with rx.session() as session:
             response = session.exec(
-                select(Response).where(Response.client_token == self.client_token)
+                select(Response)
+                .where(Response.client_token == self.client_token)
+                .where(Response.form_id == state.form.id)
             ).first()
             form = response.form
 
@@ -50,10 +56,11 @@ class ChatState(MainState):
                 debriefing_field_value_ids.append(field_value.id)
             print(f"{debriefing_field_value_ids=}")
             self.field_value_ids = debriefing_field_value_ids
+            self.loaded = True
 
             if len(debriefing_field_value_ids) < 1 or len(debriefing_field_ids) < 1:
                 print("No debriefing fields found")
-                return rx.toast.success("Thank you.")
+                return rx.redirect(routes.FORM_ENTRY_SUCCESS)
 
             env = Environment(
                 loader=PackageLoader("debriefly.data.templates", package_path=""),
