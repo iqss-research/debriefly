@@ -49,6 +49,7 @@ def field_radio(field: Field) -> rx.Component:
                 align="start",
             ),
             name=field.name,
+            required=True,
         ),
         rx.text("No options defined"),
     )
