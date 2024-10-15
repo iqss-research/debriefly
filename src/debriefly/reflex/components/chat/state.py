@@ -1,4 +1,6 @@
 import json
+
+import openai
 import reflex as rx
 from sqlmodel import select
 from jinja2 import Environment, PackageLoader, select_autoescape
@@ -143,12 +145,22 @@ class ChatState(MainState):
         # Remove the last mock answer.
         messages = messages[:-1]
 
-        session = client.client.chat.completions.create(
-            model=client.model,
-            messages=messages,
-            temperature=client.temperature,
-            stream=True,
-        )
+        try:
+            session = client.client.chat.completions.create(
+                model=client.model,
+                messages=messages,
+                temperature=client.temperature,
+                stream=True,
+            )
+        # seen to be raised on content filtering
+        except openai.BadRequestError as e:
+            logger.error(f"OpenAI API error: {e}")
+            # remove the last user message that caused the error
+            self.chats[self.current_chat_index] = self.chats[self.current_chat_index][
+                :-1
+            ]
+            self.processing = False
+            return
 
         # Stream the results, yielding after every word.
         for item in session:
