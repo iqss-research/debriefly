@@ -19,6 +19,7 @@ from debriefly.reflex.form_designer.pages import (
 from debriefly.reflex.form_designer import routes
 from debriefly.reflex.components.chat.chat import chat_ui
 from debriefly.reflex.components.chat.state import ChatState
+from debriefly.reflex.form_designer import style
 
 
 @rx.page(
@@ -62,25 +63,6 @@ def _form_edit_new() -> rx.Component:
 
 
 @rx.page(
-    route=routes.FORM_ENTRY,
-    title="TODO",
-    on_load=[MainState.init, FormEntryState.load_form, FormEntryTabState.on_load],
-)
-def _form_entry() -> rx.Component:
-    return form_entry_page()
-
-
-@rx.page(
-    route=routes.FORM_ENTRY_SUCCESS,
-    title="Form Response Saved",
-    on_load=[MainState.init, ChatState.on_load],
-)
-def _form_entry_success() -> rx.Component:
-    # return form_entry_success()
-    return chat_ui()
-
-
-@rx.page(
     route=routes.RESPONSES,
     title=responses_title(),
     on_load=[MainState.init, ResponsesState.load_responses],
@@ -88,3 +70,53 @@ def _form_entry_success() -> rx.Component:
 @template
 def _responses() -> rx.Component:
     return responses_page()
+
+
+# ----------------------
+# Non-templated pages (no login required; no enclosing layout)
+# ----------------------
+
+
+@rx.page(
+    route=routes.FORM_ENTRY,
+    title="FORM_ENTRY",
+    on_load=[MainState.init, FormEntryState.load_form, FormEntryTabState.on_load],
+)
+def _form_entry() -> rx.Component:
+    return form_entry_page()
+
+
+@rx.page(
+    route=routes.FORM_ENTRY_CHAT,
+    title="FORM_ENTRY_CHAT",
+    on_load=[MainState.init, ChatState.on_load],
+)
+def _form_entry_chat() -> rx.Component:
+    return chat_ui()
+
+
+@rx.page(
+    route=routes.FORM_ENTRY_SUCCESS,
+    title="FORM_ENTRY_SUCCESS",
+    on_load=[MainState.init],
+)
+def _form_entry_success() -> rx.Component:
+    return style.layout(
+        rx.card(
+            rx.box(
+                rx.box(
+                    rx.text("Thank you for your responses. Your submission code is ")
+                ),
+                rx.box(
+                    rx.button(
+                        rx.icon("copy"),
+                        ChatState.client_token,
+                        on_click=lambda: rx.set_clipboard(ChatState.client_token),
+                        type="button",
+                    ),
+                    margin="20px",
+                ),
+            ),
+            text_align="center",
+        ),
+    )

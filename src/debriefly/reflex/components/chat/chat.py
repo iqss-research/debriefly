@@ -1,7 +1,7 @@
 import reflex as rx
 from debriefly.reflex.components.chat.loading_icon import loading_icon
 from debriefly.reflex.components.chat.state import QA, ChatState
-from debriefly.reflex.form_designer import style
+
 
 message_style = dict(
     display="inline-block",
@@ -43,7 +43,7 @@ def message(qa: QA) -> rx.Component:
 def chat() -> rx.Component:
     return rx.vstack(
         rx.box(
-            rx.foreach(ChatState.chats[ChatState.current_chat_index], message),
+            rx.foreach(ChatState.chat, message),
             width="100%",
         ),
         py="8",
@@ -103,39 +103,9 @@ def action_bar() -> rx.Component:
     )
 
 
-def title_bar() -> rx.Component:
-    return rx.flex(
-        rx.heading(
-            "Debriefing",
-        ),
-        width="100%",
-        padding_y="4",
-        padding_x="4",
-        align_items="center",
-        justify_content="space-between",
-        background_color=rx.color("mauve", 1),
-    )
-
-
 def chat_ui() -> rx.Component:
     return rx.cond(
         ~ChatState.loaded,
         rx.spinner(),
-        rx.cond(
-            ChatState.current_chat_index >= ChatState.n_chats,
-            style.layout(
-                rx.card(
-                    "Thank you for your responses.",
-                    size="5",
-                ),
-                rx.card(
-                    rx.flex(
-                        rx.text("Your submission code is "),
-                        rx.code(ChatState.client_token),
-                    ),
-                    size="5",
-                ),
-            ),
-            rx.vstack(title_bar(), chat(), action_bar()),
-        ),
+        rx.cond(ChatState.done, rx.spinner(), rx.vstack(chat(), action_bar())),
     )

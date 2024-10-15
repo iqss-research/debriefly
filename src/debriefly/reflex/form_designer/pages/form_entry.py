@@ -1,4 +1,4 @@
-import itertools
+import logging
 import reflex as rx
 from sqlmodel import select
 from debriefly.reflex.form_designer import routes, style
@@ -6,6 +6,7 @@ from debriefly.reflex.form_designer.components import field_view
 from debriefly.reflex.backend.models import FieldType, Field, FieldValue, Form, Response
 
 Missing = object()
+logger = logging.getLogger(__name__)
 
 
 class FormEntryState(rx.State):
@@ -28,7 +29,13 @@ class FormEntryState(rx.State):
             self.form = session.get(Form, id_)
 
     async def handle_submit(self, form_data):
+        logger.info("Handling form submission")
         tab_state = await self.get_state(FormEntryTabState)
+        debriefing_fields = [
+            f for f in tab_state.fields[tab_state.active_tab] if f.debriefing
+        ]
+        # Get the first debriefing field
+        debriefing_field = debriefing_fields[0] if len(debriefing_fields) > 0 else None
 
         with rx.session() as session:
             response = session.exec(
@@ -42,9 +49,7 @@ class FormEntryState(rx.State):
                 )
 
             # only consider fields that were submitted as part of the tab (page)
-            # note that `active_tab` has already advanced to the next tab
-            for field in tab_state.fields[tab_state.active_tab - 1]:
-
+            for field in tab_state.fields[tab_state.active_tab]:
                 # delete any previously-submitted field values
                 field_value = session.exec(
                     select(FieldValue)
@@ -73,33 +78,58 @@ class FormEntryState(rx.State):
                 session.add(response)
                 session.commit()
 
-        if "done" in form_data:
+        if debriefing_field is not None:
+            logger.info("Redirecting to chat")
+            return rx.redirect(routes.FORM_ENTRY_CHAT)
+        elif "done" in form_data:
+            logger.info("Redirecting to success")
             return rx.redirect(routes.FORM_ENTRY_SUCCESS)
+        else:
+            logger.info("Advancing to next tab")
+            await tab_state.advance()
 
 
 class FormEntryTabState(rx.State):
-    fields: list[list[Field]] = [[]]
-    n_tabs: int
+    fields: list[list[Field]] = []
+    n_tabs: int = 0
     active_tab: int = 0
     is_last_tab: bool = False
 
     async def on_load(self):
+
+        logger.info("FormEntryTabState on_load")
+        if self.router.page.params.get("continue") == "true":
+            logger.info("Continuing from previous tab")
+            return
+
+        self.fields = []
+        self.n_tabs = 0
+
         state = await self.get_state(FormEntryState)
         form = state.form
         if form is not None:
-            self.fields = [
-                list(group)
-                for key, group in itertools.groupby(
-                    form.fields, key=lambda field: field.type_ == FieldType.pagebreak
-                )
-                if not key
-            ]
+            this_group_fields = []
+            for field in form.fields:
+                if (field.type_ == FieldType.pagebreak) or bool(field.debriefing):
+                    if field.type_ != FieldType.pagebreak:
+                        this_group_fields.append(field)
+                    if len(this_group_fields) > 0:
+                        self.fields.append(this_group_fields)
+                    this_group_fields = []
+                else:
+                    this_group_fields.append(field)
+
+            if this_group_fields:
+                self.fields.append(this_group_fields)
+
             self.n_tabs = len(self.fields)
         self.active_tab = 0
         self.is_last_tab = self.n_tabs == 1
 
     async def advance(self):
-        self.active_tab += 1
+        logger.info("Advancing to next tab")
+        if not self.is_last_tab:
+            self.active_tab += 1
         self.is_last_tab = self.active_tab >= self.n_tabs - 1
 
 
@@ -114,7 +144,6 @@ def form_entry_page():
     return style.layout(
         rx.form(
             rx.vstack(
-                rx.center(rx.heading(FormEntryState.form.name)),
                 rx.tabs.root(
                     rx.tabs.list(
                         rx.foreach(
@@ -131,12 +160,8 @@ def form_entry_page():
                 ),
                 rx.cond(
                     FormEntryTabState.is_last_tab,
-                    rx.button(
-                        "Submit", type="submit", on_click=FormEntryTabState.advance
-                    ),
-                    rx.button(
-                        "Next", type="submit", on_click=FormEntryTabState.advance
-                    ),
+                    rx.button("Submit", type="submit"),
+                    rx.button("Next", type="submit"),
                 ),
             ),
             rx.cond(

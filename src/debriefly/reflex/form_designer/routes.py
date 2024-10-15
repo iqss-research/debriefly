@@ -1,4 +1,5 @@
 FORM_ENTRY = "/form/[form_id]"
+FORM_ENTRY_CHAT = "/form/chat"
 FORM_ENTRY_SUCCESS = "/form/success"
 FORM_EDIT_NEW = "/edit/form/"
 FORM_EDIT_ID = "/edit/form/[form_id]"

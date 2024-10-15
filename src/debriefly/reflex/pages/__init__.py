@@ -17,6 +17,7 @@ from debriefly.reflex.pages.form_designer import (
     _form_edit_id,
     _form_edit_new,
     _form_entry,
+    _form_entry_chat,
     _form_entry_success,
     _responses,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "_form_edit_id",
     "_form_edit_new",
     "_form_entry",
+    "_form_entry_chat",
     "_form_entry_success",
     "_responses",
 ]
