@@ -56,7 +56,6 @@ class Field(rx.Model, table=True):
     field_values: list["FieldValue"] = sqlmodel.Relationship(
         back_populates="field",
         sa_relationship_kwargs={
-            "lazy": "noload",
             "cascade": "all, delete, delete-orphan",
         },
     )
