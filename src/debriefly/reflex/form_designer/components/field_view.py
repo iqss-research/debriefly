@@ -101,11 +101,14 @@ def field_input(field: Field):
     )
 
 
-def field_prompt(field: Field, show_name: bool = False):
+def field_prompt(field: Field, markdown: str = "", show_name: bool = False):
     name = f" ({field.name})" if show_name else ""
     return rx.match(
         field.type_,
-        (FieldType.static.value, rx.markdown(field.prompt)),
+        (
+            FieldType.static.value,
+            rx.markdown(rx.cond(markdown == "", field.prompt, markdown)),
+        ),
         (FieldType.pagebreak.value, rx.text("------ break ------")),
         rx.cond(
             field.prompt != "",
@@ -119,11 +122,11 @@ def field_prompt(field: Field, show_name: bool = False):
     )
 
 
-def field_view(field: Field):
+def field_view(field: Field, markdown: str = ""):
     return rx.card(
         rx.hstack(
             # https://github.com/reflex-dev/reflex/issues/1655
-            rx.box(field_prompt(field)),
+            rx.box(field_prompt(field, markdown)),
         ),
         rx.hstack(
             field_input(field),
