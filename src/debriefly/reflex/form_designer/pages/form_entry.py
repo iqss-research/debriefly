@@ -95,6 +95,11 @@ class FormEntryTabState(rx.State):
     active_tab: int = 0
     is_last_tab: bool = False
 
+    # Markdown fields have a provision of having placeholders
+    # (e.g. `{submission_id}`) that are evaluated at runtime
+    # This dict holds a mapping of string field id to such markdown values
+    markdowns: dict[str, str] = {}
+
     async def on_load(self):
 
         logger.info("FormEntryTabState on_load")
@@ -110,6 +115,14 @@ class FormEntryTabState(rx.State):
         if form is not None:
             this_group_fields = []
             for field in form.fields:
+
+                if field.type_ == FieldType.static:
+                    self.markdowns[str(field.id)] = field.prompt.format(
+                        **self.markdown_variables()
+                    )
+                else:
+                    self.markdowns[str(field.id)] = ""
+
                 if (field.type_ == FieldType.pagebreak) or bool(field.debriefing):
                     if field.type_ != FieldType.pagebreak:
                         this_group_fields.append(field)
@@ -132,10 +145,22 @@ class FormEntryTabState(rx.State):
             self.active_tab += 1
         self.is_last_tab = self.active_tab >= self.n_tabs - 1
 
+    def markdown_variables(self) -> dict[str, str]:
+        return dict(
+            submission_id=self.router.session.client_token,
+        )
+
 
 def form_entry_tab(fields: list[Field], i: int):
     return rx.tabs.content(
-        rx.vstack(rx.foreach(fields, field_view)),
+        rx.vstack(
+            rx.foreach(
+                fields,
+                lambda field: field_view(
+                    field, markdown=FormEntryTabState.markdowns[field.id.to_string()]
+                ),
+            )
+        ),
         value=f"tab_{i}",
     )
 
