@@ -82,8 +82,17 @@ class FormEntryState(rx.State):
             logger.info("Redirecting to chat")
             return rx.redirect(routes.FORM_ENTRY_CHAT)
         elif "done" in form_data:
-            logger.info("Redirecting to success")
-            return rx.redirect(routes.FORM_ENTRY_SUCCESS)
+            logger.info("Done with survey")
+            # If the last question shown was a static question, assume
+            # that it's some sort of 'Thank you' message. If not, redirect
+            # to our custom 'done' screen
+            if tab_state.fields[tab_state.active_tab][-1].type_ == FieldType.static:
+                return rx.toast.success(
+                    "Thank you. You can now close this browser window."
+                )
+            else:
+                logger.info("Redirecting to done screen")
+                return rx.redirect(routes.FORM_ENTRY_SUCCESS)
         else:
             logger.info("Advancing to next tab")
             await tab_state.advance()
