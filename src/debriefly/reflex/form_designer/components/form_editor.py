@@ -68,6 +68,7 @@ class FormEditorState(AppState):
                     if existing_field.id == field.id:
                         existing_field.name = field.name
                         existing_field.type_ = field.type_
+                        existing_field.required = field.required
                         existing_field.debriefing = field.debriefing
                         existing_field.prompt = field.prompt
                         existing_field.ordering = field.ordering
@@ -102,9 +103,10 @@ def field_edit_view(field: Field):
         ),
         rx.hstack(
             rx.hstack(
-                field_input(field),
+                field_input(field, editing=True),
                 flex_wrap="wrap",
             ),
+            rx.text(rx.cond(field.required, "(required)", ""), size="1", ml="3"),
             rx.text(rx.cond(field.debriefing, "(debriefing)", ""), size="1", ml="3"),
             justify="between",
         ),

@@ -21,12 +21,16 @@ class FieldEditorState(AppState):
     def handle_submit(self, form_data: dict[str, str]):
         self.field.name = form_data["field_name"]
         self.field.type_ = form_data["type_"]
+        self.field.required = bool(form_data.get("required"))
         self.field.debriefing = bool(form_data.get("debriefing"))
         self.field_editor_open = False
         return [
             FormEditorState.update_field(self.field),
             rx.redirect(routes.edit_form(self.form_id)),
         ]
+
+    def handle_required_change(self, is_checked: bool):
+        self.field.required = is_checked
 
     def handle_debriefing_change(self, is_checked: bool):
         self.field.debriefing = is_checked
@@ -266,6 +270,12 @@ def field_editor():
                         & (FieldEditorState.field.type_ != FieldType.pagebreak.value),
                         rx.box(
                             rx.checkbox(
+                                "Required",
+                                name="required",
+                                checked=FieldEditorState.field.required,
+                                on_change=FieldEditorState.handle_required_change,
+                            ),
+                            rx.checkbox(
                                 "Debriefing",
                                 name="debriefing",
                                 checked=FieldEditorState.field.debriefing,
@@ -277,7 +287,7 @@ def field_editor():
                 ),
                 field_is_enumerated_cond(
                     rx.scroll_area(
-                        field_input(FieldEditorState.field),
+                        field_input(FieldEditorState.field, editing=True),
                         max_height="200px",
                     ),
                 ),

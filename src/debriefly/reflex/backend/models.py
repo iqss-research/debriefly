@@ -45,6 +45,7 @@ class Option(rx.Model, table=True):
 class Field(rx.Model, table=True):
     name: str = ""
     type_: FieldType = FieldType.text
+    required: bool = False
     debriefing: bool = False
     prompt: str = ""
     ordering: float = 0.0

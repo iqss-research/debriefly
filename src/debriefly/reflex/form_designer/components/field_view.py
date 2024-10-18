@@ -40,7 +40,7 @@ def radio_item(*children: rx.Component, value: rx.Var[str], **props) -> rx.Compo
     )
 
 
-def field_radio(field: Field) -> rx.Component:
+def field_radio(field: Field, editing: bool = False) -> rx.Component:
     return rx.cond(
         field.options,
         rx.radio.root(
@@ -49,7 +49,7 @@ def field_radio(field: Field) -> rx.Component:
                 align="start",
             ),
             name=field.name,
-            required=True,
+            required=rx.cond(editing, False, field.required),
         ),
         rx.text("No options defined"),
     )
@@ -78,11 +78,11 @@ def field_checkbox(field: Field) -> rx.Component:
     )
 
 
-def field_input(field: Field):
+def field_input(field: Field, editing: bool = False):
     return rx.match(
         field.type_,
         (FieldType.checkbox.value, field_checkbox(field)),
-        (FieldType.radio.value, field_radio(field)),
+        (FieldType.radio.value, field_radio(field, editing=editing)),
         (
             FieldType.textarea.value,
             rx.text_area(
@@ -97,6 +97,7 @@ def field_input(field: Field):
             type=field.type_.to(str),
             name=field.name,
             aria_label=field.name,
+            required=field.required,
         ),
     )
 
@@ -127,6 +128,7 @@ def field_view(field: Field, markdown: str = ""):
         rx.hstack(
             # https://github.com/reflex-dev/reflex/issues/1655
             rx.box(field_prompt(field, markdown)),
+            rx.text(rx.cond(field.required, "*", "")),
         ),
         rx.hstack(
             field_input(field),
