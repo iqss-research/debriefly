@@ -2,7 +2,7 @@ import json
 
 import openai
 import reflex as rx
-from sqlmodel import select
+from sqlmodel import select, or_
 from jinja2 import Environment, PackageLoader, select_autoescape
 import logging
 from debriefly.openai import get_client
@@ -79,7 +79,12 @@ class ChatState(MainState):
                     session.exec(
                         select(Option)
                         .where(Option.field_id == field_id)
-                        .where(Option.value == field_value_value_id)
+                        .where(
+                            or_(
+                                Option.value == field_value_value_id,
+                                Option.label == field_value_value_id,
+                            )
+                        )
                     )
                     .first()
                     .label
