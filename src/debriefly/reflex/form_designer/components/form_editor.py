@@ -165,6 +165,21 @@ def form_editor():
     )
 
 
+def form_entry_title():
+    from debriefly.reflex.form_designer.pages import FormEntryState
+
+    form_name = rx.cond(
+        rx.State.form_id == "",
+        utils.quoted_var("New Survey"),
+        rx.cond(
+            FormEntryState.form,
+            FormEntryState.form.name,
+            utils.quoted_var("Unknown Survey"),
+        ),
+    )
+    return f"{constants.TITLE} | {form_name}"
+
+
 def form_edit_title():
     form_name = rx.cond(
         rx.State.form_id == "",

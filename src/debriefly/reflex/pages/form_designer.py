@@ -1,7 +1,11 @@
 import reflex as rx
 from debriefly.reflex.template import template
 from debriefly.reflex.backend.backend import MainState
-from debriefly.reflex.form_designer.components import form_edit_title, field_edit_title
+from debriefly.reflex.form_designer.components import (
+    form_entry_title,
+    form_edit_title,
+    field_edit_title,
+)
 from debriefly.reflex.form_designer.components import (
     FormEditorState,
     FieldEditorState,
@@ -79,7 +83,7 @@ def _responses() -> rx.Component:
 
 @rx.page(
     route=routes.FORM_ENTRY,
-    title="FORM_ENTRY",
+    title=form_entry_title(),
     on_load=[MainState.init, FormEntryState.load_form, FormEntryTabState.on_load],
 )
 def _form_entry() -> rx.Component:

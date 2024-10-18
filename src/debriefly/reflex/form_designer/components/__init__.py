@@ -10,6 +10,7 @@ from debriefly.reflex.form_designer.components.field_view import (
 from debriefly.reflex.form_designer.components.form_editor import (
     FormEditorState,
     form_editor,
+    form_entry_title,
     form_edit_title,
 )
 from debriefly.reflex.form_designer.components.form_select import (
@@ -26,6 +27,7 @@ __all__ = [
     "field_editor_modal",
     "field_prompt",
     "field_view",
+    "form_entry_title",
     "form_edit_title",
     "form_editor",
     "form_select",
