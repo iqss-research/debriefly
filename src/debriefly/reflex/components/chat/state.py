@@ -7,7 +7,13 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 import logging
 from debriefly.openai import get_client
 from debriefly.reflex.backend.backend import MainState
-from debriefly.reflex.backend.models import Response, FieldValue, Field
+from debriefly.reflex.backend.models import (
+    Response,
+    FieldValue,
+    Field,
+    Option,
+    FieldType,
+)
 from debriefly.reflex.form_designer.pages.form_entry import (
     FormEntryState,
     FormEntryTabState,
@@ -59,17 +65,29 @@ class ChatState(MainState):
 
             state = await self.get_state(FormEntryTabState)
             field_id = state.fields[state.active_tab][0].id
-            field_value_id = (
-                session.exec(
-                    select(FieldValue)
-                    .where(FieldValue.response_id == response_id)
-                    .where(FieldValue.field_id == field_id)
+            field_type = state.fields[state.active_tab][0].type_
+            field_value = session.exec(
+                select(FieldValue)
+                .where(FieldValue.response_id == response_id)
+                .where(FieldValue.field_id == field_id)
+            ).first()
+            field_value_id = field_value.id
+            field_value_value_id = field_value.value
+
+            if field_type in (FieldType.radio, FieldType.checkbox):
+                field_value_label = (
+                    session.exec(
+                        select(Option)
+                        .where(Option.field_id == field_id)
+                        .where(Option.value == field_value_value_id)
+                    )
+                    .first()
+                    .label
                 )
-                .first()
-                .id
-            )
+            else:
+                field_value_label = field_value_value_id
             logger.info(
-                f"Obtained field_id: {field_id} and field_value_id: {field_value_id} for debriefing"
+                f"Obtained {field_id=}, {field_value_id=}, {field_value_label=} for debriefing"
             )
             self.field_value_id = field_value_id
             self.loaded = True
@@ -82,11 +100,7 @@ class ChatState(MainState):
             debriefing_field_prompt = (
                 session.exec(select(Field).where(Field.id == field_id)).first().prompt
             )
-            debriefing_field_value = (
-                session.exec(select(FieldValue).where(FieldValue.id == field_value_id))
-                .first()
-                .value
-            )
+            debriefing_field_value = field_value_label
 
             kwargs = {
                 "question": debriefing_field_prompt,
