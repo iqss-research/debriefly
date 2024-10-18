@@ -208,10 +208,16 @@ class ChatState(MainState):
                 session.commit()
 
                 logger.info("Saved debriefing to db")
-                logger.info("Proceeding to form entry page")
                 state = await self.get_state(FormEntryTabState)
                 await state.advance()
-                yield rx.redirect(routes.show_form(self.form_id2) + "?continue=true")
+                if not state.is_beyond_last_tab:
+                    logger.info("Continuing to form entry page")
+                    yield rx.redirect(
+                        routes.show_form(self.form_id2) + "?continue=true"
+                    )
+                else:
+                    logger.info("Redirecting to done screen")
+                    yield rx.redirect(routes.FORM_ENTRY_SUCCESS)
 
         # Toggle the processing flag.
         self.processing = False

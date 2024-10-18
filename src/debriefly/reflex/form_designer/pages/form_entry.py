@@ -103,6 +103,7 @@ class FormEntryTabState(rx.State):
     n_tabs: int = 0
     active_tab: int = 0
     is_last_tab: bool = False
+    is_beyond_last_tab: bool = False
 
     # Markdown fields have a provision of having placeholders
     # (e.g. `{submission_id}`) that are evaluated at runtime
@@ -150,9 +151,9 @@ class FormEntryTabState(rx.State):
 
     async def advance(self):
         logger.info("Advancing to next tab")
-        if not self.is_last_tab:
-            self.active_tab += 1
+        self.active_tab += 1
         self.is_last_tab = self.active_tab >= self.n_tabs - 1
+        self.is_beyond_last_tab = self.active_tab >= self.n_tabs
 
     def markdown_variables(self) -> dict[str, str]:
         return dict(
