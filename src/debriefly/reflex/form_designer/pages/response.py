@@ -1,4 +1,6 @@
 import json
+import csv
+import io
 import reflex as rx
 from debriefly.reflex.form_designer import constants, routes, style, utils
 from debriefly.reflex.form_designer.components import field_prompt
@@ -50,6 +52,34 @@ class ResponsesState(AppState):
             session.delete(session.get(Response, id))
             session.commit()
             return ResponsesState.load_responses
+
+    def download(self):
+        with io.StringIO() as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "Response ID",
+                    "Submitted",
+                    "Client Token",
+                    "Question",
+                    "Answer",
+                    "Debriefing",
+                ]
+            )
+            for response in self.responses:
+                for field_value in response.field_values:
+                    fields = [
+                        response.id,
+                        response.ts,
+                        response.client_token,
+                        field_value.field.name,
+                        field_value.value,
+                        field_value.debriefing,
+                    ]
+                    writer.writerow(fields)
+            return rx.download(
+                data=f.getvalue(), filename=f"{self.form.name}_responses.csv"
+            )
 
 
 def debriefing_transcript(response: Response, field_value: FieldValue):
@@ -154,7 +184,14 @@ def responses_accordion(**props):
 def responses_page(**props):
     return style.layout(
         rx.link("< Edit", href=routes.edit_form(ResponsesState.form.id)),
-        rx.center(rx.heading(ResponsesState.form.name)),
+        rx.center(
+            rx.heading(ResponsesState.form.name),
+            rx.spacer(),
+            rx.tooltip(
+                rx.button(rx.icon("download"), on_click=ResponsesState.download),
+                content="Download CSV",
+            ),
+        ),
         responses_accordion(
             variant="outline",
             radius="small",
