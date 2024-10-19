@@ -30,7 +30,8 @@ class QA(rx.Base):
 
 class ChatState(MainState):
     loaded: bool = False
-    form_id2: int = -1  # populated on on_load
+    this_form_id: int = -1  # populated on on_load
+    this_form_code: str = ""  # populated on on_load
     field_value_id: int = -1  # populated on on_load
     client_token: str  # populated on on_load
     chat: list[QA]
@@ -46,7 +47,8 @@ class ChatState(MainState):
 
         state = await self.get_state(FormEntryState)
         self.client_token = state.client_token
-        self.form_id2 = state.form.id
+        self.this_form_id = state.form.id
+        self.this_form_code = state.form.code
         logger.info(
             f"Loading debriefing response for response {self.client_token} and form {state.form.id}"
         )
@@ -56,7 +58,7 @@ class ChatState(MainState):
                 session.exec(
                     select(Response)
                     .where(Response.client_token == self.client_token)
-                    .where(Response.form_id == self.form_id2)
+                    .where(Response.form_id == self.this_form_id)
                 )
                 .first()
                 .id
@@ -64,8 +66,8 @@ class ChatState(MainState):
             logger.info(f"Obtained response_id: {response_id}")
 
             state = await self.get_state(FormEntryTabState)
-            field_id = state.fields[state.active_tab][0].id
-            field_type = state.fields[state.active_tab][0].type_
+            field_id = state.fields[state.active_tab][-1].id
+            field_type = state.fields[state.active_tab][-1].type_
             field_value = session.exec(
                 select(FieldValue)
                 .where(FieldValue.response_id == response_id)
@@ -218,7 +220,7 @@ class ChatState(MainState):
                 if not state.is_beyond_last_tab:
                     logger.info("Continuing to form entry page")
                     yield rx.redirect(
-                        routes.show_form(self.form_id2) + "?continue=true"
+                        routes.show_form(self.this_form_code) + "?continue=true"
                     )
                 else:
                     logger.info("Redirecting to done screen")

@@ -1,3 +1,4 @@
+import uuid
 import reflex as rx
 from debriefly.reflex.form_designer import constants, routes, utils
 from debriefly.reflex.backend.models import Field, Form
@@ -13,7 +14,7 @@ class FormEditorState(AppState):
     form: Form = Form()
 
     def _new_form(self):
-        return Form(user_id=self.user_id)
+        return Form(user_id=self.user_id, code=uuid.uuid4().hex)
 
     def load_form(self):
         if self.form_id != "":
@@ -115,7 +116,7 @@ def field_edit_view(field: Field):
 
 def copy_url():
     # TODO: Get base url from config
-    url = "https://debriefly.net" + routes.show_form(FormEditorState.form.id)
+    url = "https://debriefly.net" + routes.show_form(FormEditorState.form.code)
     return rx.set_clipboard(url)
 
 

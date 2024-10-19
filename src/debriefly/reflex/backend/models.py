@@ -64,6 +64,7 @@ class Field(rx.Model, table=True):
 
 class Form(rx.Model, table=True):
     name: str = ""
+    code: str = ""
     user_id: str = sqlmodel.Field(foreign_key="user.user_id")
 
     fields: list[Field] = sqlmodel.Relationship(

@@ -19,14 +19,14 @@ class FormEntryState(rx.State):
         return self.client_token
 
     def load_form(self):
-        if self.form_id != "":
-            self.load_form_by_id(self.form_id)
+        if self.form_code != "":
+            self.load_form_by_code(self.form_code)
         else:
             self.form = Form()
 
-    def load_form_by_id(self, id_: int):
+    def load_form_by_code(self, code: str):
         with rx.session() as session:
-            self.form = session.get(Form, id_)
+            self.form = session.exec(select(Form).where(Form.code == code)).first()
 
     async def handle_submit(self, form_data):
         logger.info("Handling form submission")
@@ -123,6 +123,9 @@ class FormEntryTabState(rx.State):
         state = await self.get_state(FormEntryState)
         form = state.form
         if form is not None:
+
+            # Break fields in "pages", with page breaks after any debriefing
+            # field, or any explicit `pagebreak` field.
             this_group_fields = []
             for field in form.fields:
 
