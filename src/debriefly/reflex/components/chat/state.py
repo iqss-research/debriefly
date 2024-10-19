@@ -46,7 +46,7 @@ class ChatState(MainState):
         self.done = False
 
         state = await self.get_state(FormEntryState)
-        self.client_token = state.client_token
+        self.client_token = state._ensure_client_token()
         self.this_form_id = state.form.id
         self.this_form_code = state.form.code
         logger.info(

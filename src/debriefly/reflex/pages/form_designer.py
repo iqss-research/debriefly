@@ -114,7 +114,7 @@ def _form_entry_success() -> rx.Component:
                 rx.box(
                     rx.button(
                         rx.icon("copy"),
-                        ChatState.client_token,
+                        FormEntryState.client_token,
                         on_click=lambda: rx.set_clipboard(ChatState.client_token),
                         type="button",
                     ),
