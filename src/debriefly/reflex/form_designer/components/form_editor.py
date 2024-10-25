@@ -143,17 +143,41 @@ def form_editor():
                         type="button",
                     ),
                     rx.button(
+                        rx.icon("eye"),
+                        "Preview",
+                        on_click=rx.redirect(
+                            routes.show_form(FormEditorState.form.code)
+                            + "?preview=yes",
+                            external=True,
+                        ),
+                        type="button",
+                    ),
+                    rx.button(
                         "Responses",
                         on_click=rx.redirect(
                             routes.form_responses(FormEditorState.form.id)
                         ),
                     ),
                     rx.spacer(),
-                    rx.button(
-                        "Delete Survey",
-                        color_scheme="tomato",
-                        on_click=FormEditorState.delete_form,
-                        type="button",
+                    rx.alert_dialog.root(
+                        rx.alert_dialog.trigger(
+                            rx.button("Delete Survey", color_scheme="tomato"),
+                        ),
+                        rx.alert_dialog.content(
+                            rx.alert_dialog.title("Delete Survey"),
+                            rx.alert_dialog.description(
+                                "Are you sure you want to delete this survey?"
+                            ),
+                            rx.flex(
+                                rx.alert_dialog.cancel(rx.button("Cancel")),
+                                rx.spacer(),
+                                rx.alert_dialog.action(
+                                    rx.button(
+                                        "Delete", on_click=FormEditorState.delete_form
+                                    )
+                                ),
+                            ),
+                        ),
                     ),
                 ),
             ),

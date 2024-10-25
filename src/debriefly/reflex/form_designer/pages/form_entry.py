@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class FormEntryState(rx.State):
     form: Form = Form()
     client_token: str = rx.Cookie("")
+    is_preview: bool = False
 
     def _ensure_client_token(self):
         if self.client_token == "":
@@ -19,6 +20,10 @@ class FormEntryState(rx.State):
         return self.client_token
 
     def load_form(self):
+        if self.router.page.params.get("preview"):
+            self.is_preview = True
+            logger.info("Running in preview mode")
+
         if self.form_code != "":
             self.load_form_by_code(self.form_code)
         else:
@@ -83,6 +88,19 @@ class FormEntryState(rx.State):
             return rx.redirect(routes.FORM_ENTRY_CHAT)
         elif "done" in form_data:
             logger.info("Done with survey")
+
+            if self.is_preview:
+                logger.info("Preview mode, deleting saved response")
+                with rx.session() as session:
+                    response = session.exec(
+                        select(Response)
+                        .where(Response.client_token == self._ensure_client_token())
+                        .where(Response.form_id == self.form.id)
+                    ).first()
+                    if response is not None:
+                        session.delete(response)
+                        session.commit()
+
             # If the last question shown was a static question, assume
             # that it's some sort of 'Thank you' message. If not, redirect
             # to our custom 'done' screen
@@ -111,9 +129,8 @@ class FormEntryTabState(rx.State):
     markdowns: dict[str, str] = {}
 
     async def on_load(self):
-
         logger.info("FormEntryTabState on_load")
-        if self.router.page.params.get("continue") == "true":
+        if self.router.page.params.get("continue"):
             logger.info("Continuing from previous tab")
             return
 

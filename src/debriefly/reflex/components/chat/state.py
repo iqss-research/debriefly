@@ -220,9 +220,25 @@ class ChatState(MainState):
                 if not state.is_beyond_last_tab:
                     logger.info("Continuing to form entry page")
                     yield rx.redirect(
-                        routes.show_form(self.this_form_code) + "?continue=true"
+                        routes.show_form(self.this_form_code) + "?continue=yes"
                     )
                 else:
+                    # TODO: duplicated code from form_entry.py
+                    state = await self.get_state(FormEntryState)
+                    if state.is_preview:
+                        logger.info("Preview mode, deleting saved response")
+                        with rx.session() as session:
+                            response = session.exec(
+                                select(Response)
+                                .where(
+                                    Response.client_token
+                                    == state._ensure_client_token()
+                                )
+                                .where(Response.form_id == state.form.id)
+                            ).first()
+                            if response is not None:
+                                session.delete(response)
+                                session.commit()
                     logger.info("Redirecting to done screen")
                     yield rx.redirect(routes.FORM_ENTRY_SUCCESS)
 

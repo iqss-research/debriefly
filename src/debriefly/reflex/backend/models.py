@@ -52,7 +52,11 @@ class Field(rx.Model, table=True):
 
     form_id: int = sqlmodel.Field(foreign_key="form.id")
     options: list[Option] = sqlmodel.Relationship(
-        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete"},
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete",
+            "order_by": "Option.id",
+        },
     )
     field_values: list["FieldValue"] = sqlmodel.Relationship(
         back_populates="field",
