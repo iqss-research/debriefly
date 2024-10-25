@@ -18,12 +18,14 @@ from debriefly.reflex.form_designer.pages import (
     form_entry_page,
     responses_page,
     responses_title,
+    responses_analysis_title,
     ResponsesState,
 )
 from debriefly.reflex.form_designer import routes
 from debriefly.reflex.components.chat.chat import chat_ui
 from debriefly.reflex.components.chat.state import ChatState
 from debriefly.reflex.form_designer import style
+from debriefly.reflex.components.analyze.chat import chat_ui as analysis_chat_ui
 
 
 @rx.page(
@@ -74,6 +76,16 @@ def _form_edit_new() -> rx.Component:
 @template
 def _responses() -> rx.Component:
     return responses_page()
+
+
+@rx.page(
+    route=routes.RESPONSES_ANALYZE,
+    title=responses_analysis_title(),
+    on_load=[MainState.init],
+)
+@template
+def _responses_analysis() -> rx.Component:
+    return analysis_chat_ui()
 
 
 # ----------------------

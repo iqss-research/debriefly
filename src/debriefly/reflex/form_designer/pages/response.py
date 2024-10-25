@@ -1,12 +1,14 @@
 import json
 import csv
 import io
+import logging
 import reflex as rx
 from debriefly.reflex.form_designer import constants, routes, style, utils
 from debriefly.reflex.form_designer.components import field_prompt
 from debriefly.reflex.backend.models import Form, Response, FieldValue
 from debriefly.reflex.backend.backend import MainState as AppState
 
+logger = logging.getLogger(__name__)
 
 message_style = dict(
     display="inline-block",
@@ -22,6 +24,32 @@ class ResponsesState(AppState):
     # { response_id: { field_id: list_of_messages, ... }, ... }
     # where list_of_messages is a list of dicts with keys "role" and "content"
     response_debriefings: dict[int, dict[int, list[dict[str, str]]]] = {}
+
+    @rx.var
+    def index_is_current(self) -> bool:
+        if self.form_id == "":
+            return False
+        with rx.session() as session:
+            return session.get(Form, self.form_id).index_is_current()
+
+    @rx.var
+    def index_is_available(self) -> bool:
+        if self.form_id == "":
+            return False
+        with rx.session() as session:
+            return session.get(Form, self.form_id).index_is_available()
+
+    async def index(self):
+        if self.form_id != "":
+            logger.info(f"Starting indexing for form {self.form_id}")
+            with rx.session() as session:
+                form = session.get(Form, self.form_id)
+                form.index()
+                session.add(form)
+                session.commit()
+            return rx.toast.success(
+                "Indexing complete. Please refresh the page in a couple of minutes and the Analyze button should be available."
+            )
 
     def load_responses(self):
         with rx.session() as session:
@@ -169,6 +197,15 @@ def responses_title():
     return f"{constants.TITLE} | {form_name} | Responses"
 
 
+def responses_analysis_title():
+    form_name = rx.cond(
+        rx.State.form_id == "",
+        utils.quoted_var("Unknown Form"),
+        ResponsesState.form.name,
+    )
+    return f"{constants.TITLE} | {form_name} | Analysis"
+
+
 def responses_accordion(**props):
     return rx.accordion.root(
         rx.foreach(
@@ -184,13 +221,50 @@ def responses_accordion(**props):
 def responses_page(**props):
     return style.layout(
         rx.link("< Edit", href=routes.edit_form(ResponsesState.form.id)),
-        rx.center(
+        rx.flex(
             rx.heading(ResponsesState.form.name),
             rx.spacer(),
+            rx.cond(
+                ResponsesState.index_is_current,
+                rx.alert_dialog.root(
+                    rx.alert_dialog.trigger(
+                        rx.button(rx.icon("refresh-ccw"), color_scheme="green"),
+                    ),
+                    rx.alert_dialog.content(
+                        rx.alert_dialog.title("Update Index"),
+                        rx.alert_dialog.description(
+                            "The index is current and doesn't need to be updated. Are you sure you want to update it?"
+                        ),
+                        rx.flex(
+                            rx.alert_dialog.cancel(rx.button("Cancel")),
+                            rx.spacer(),
+                            rx.alert_dialog.action(
+                                rx.button("Update", on_click=ResponsesState.index)
+                            ),
+                        ),
+                    ),
+                ),
+                rx.button(
+                    rx.icon("refresh-ccw"),
+                    color_scheme="tomato",
+                    on_click=ResponsesState.index,
+                ),
+            ),
+            rx.tooltip(
+                rx.button(
+                    rx.icon("play"),
+                    disabled=~ResponsesState.index_is_available,
+                    on_click=rx.redirect(
+                        routes.form_responses_analyze(ResponsesState.form.id)
+                    ),
+                ),
+                content="Analyze",
+            ),
             rx.tooltip(
                 rx.button(rx.icon("download"), on_click=ResponsesState.download),
                 content="Download CSV",
             ),
+            spacing="1",
         ),
         responses_accordion(
             variant="outline",

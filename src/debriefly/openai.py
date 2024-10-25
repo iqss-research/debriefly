@@ -179,16 +179,14 @@ class AzureOpenAISearch:
             credential=self.credential,
         )
 
-    def upload(self, documents: list[str]):
+    def upload(self, documents: dict[str, str]):
         """
         Upload documents to the Azure Search database
         """
         self.search_index_client.create_or_update_index(self.search_index)
 
         # Upload your list of strings to the index
-        docs = [
-            {"id": str(i), "content": content} for i, content in enumerate(documents)
-        ]
+        docs = [{"id": k, "content": v} for k, v in documents.items()]
         self.search_client.upload_documents(docs)
 
     def rag(self, query: str):

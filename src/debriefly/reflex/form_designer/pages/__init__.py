@@ -10,6 +10,7 @@ from debriefly.reflex.form_designer.pages.response import (
     ResponsesState,
     responses_page,
     responses_title,
+    responses_analysis_title,
 )
 
 
@@ -23,4 +24,5 @@ __all__ = [
     "home_page",
     "responses_page",
     "responses_title",
+    "responses_analysis_title",
 ]

@@ -28,7 +28,7 @@ dependencies = [
     "requests",
     "requests_oauth2client",
     "rich",
-    "reflex<0.6",
+    "reflex>=0.5.6,<0.6",
     "reflex-clerk@git+https://github.com/vineetbansal/reflex-clerk.git",
     "authlib",
     "psycopg2-binary",

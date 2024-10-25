@@ -6,6 +6,7 @@ FORM_EDIT_ID = "/edit/form/[form_id]"
 FIELD_EDIT_NEW = "/edit/form/[form_id]/field/"
 FIELD_EDIT_ID = "/edit/form/[form_id]/field/[field_id]"
 RESPONSES = "/responses/[form_id]"
+RESPONSES_ANALYZE = "/responses/[form_id]/analyze"
 
 
 def edit_form(form_id: int | str):
@@ -22,3 +23,7 @@ def show_form(form_code: str):
 
 def form_responses(form_id: int | str):
     return f"/responses/{form_id}"
+
+
+def form_responses_analyze(form_id: int | str):
+    return f"/responses/{form_id}/analyze"

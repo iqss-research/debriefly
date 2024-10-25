@@ -1,4 +1,5 @@
 import logging
+import datetime
 import reflex as rx
 from sqlmodel import select
 from debriefly.reflex.form_designer import routes, style
@@ -80,6 +81,8 @@ class FormEntryState(rx.State):
                             response.field_values.append(
                                 FieldValue(field_id=field.id, value=form_data[key])
                             )
+
+                response.ts = datetime.datetime.now()
                 session.add(response)
                 session.commit()
 
