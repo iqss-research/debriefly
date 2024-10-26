@@ -16,6 +16,12 @@ class AnalysisState(ResponsesState):
     processing: bool = False
     done: bool = False
 
+    async def on_load(self):
+        super().load_responses()
+        self.chat = []
+        self.processing = False
+        self.done = False
+
     async def process_question(self, form_data: dict[str, str]):
         question = form_data["question"]
         if question == "":

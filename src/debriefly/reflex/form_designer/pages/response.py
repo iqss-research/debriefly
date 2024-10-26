@@ -30,14 +30,20 @@ class ResponsesState(AppState):
         if self.form_id == "":
             return False
         with rx.session() as session:
-            return session.get(Form, self.form_id).index_is_current()
+            form = session.get(Form, self.form_id)
+            if form is None:
+                return False
+            return form.index_is_current()
 
     @rx.var
     def index_is_available(self) -> bool:
         if self.form_id == "":
             return False
         with rx.session() as session:
-            return session.get(Form, self.form_id).index_is_available()
+            form = session.get(Form, self.form_id)
+            if form is None:
+                return False
+            return form.index_is_available()
 
     async def index(self):
         if self.form_id != "":

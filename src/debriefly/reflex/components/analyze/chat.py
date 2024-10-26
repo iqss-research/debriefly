@@ -1,7 +1,8 @@
 import reflex as rx
 from debriefly.reflex.components.analyze.loading_icon import loading_icon
 from debriefly.reflex.components.analyze.state import QA, AnalysisState
-
+from debriefly.reflex.form_designer import style, routes
+from debriefly.reflex.form_designer.pages import ResponsesState
 
 message_style = dict(
     display="inline-block",
@@ -103,20 +104,8 @@ def action_bar() -> rx.Component:
     )
 
 
-def title_bar() -> rx.Component:
-    return rx.flex(
-        rx.text(
-            f"Analysis (form {AnalysisState.form.id})",
-            size="4xl",
-        ),
-        width="100%",
-        padding_y="4",
-        padding_x="4",
-        align_items="center",
-        justify_content="space-between",
-        background_color=rx.color("mauve", 1),
-    )
-
-
 def chat_ui() -> rx.Component:
-    return rx.vstack(title_bar(), chat(), action_bar())
+    return style.layout(
+        rx.link("< Responses", href=routes.form_responses(ResponsesState.form.id)),
+        rx.vstack(rx.heading(AnalysisState.form.name), chat(), action_bar()),
+    )

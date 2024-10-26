@@ -26,6 +26,7 @@ from debriefly.reflex.components.chat.chat import chat_ui
 from debriefly.reflex.components.chat.state import ChatState
 from debriefly.reflex.form_designer import style
 from debriefly.reflex.components.analyze.chat import chat_ui as analysis_chat_ui
+from debriefly.reflex.components.analyze.state import AnalysisState
 
 
 @rx.page(
@@ -81,7 +82,7 @@ def _responses() -> rx.Component:
 @rx.page(
     route=routes.RESPONSES_ANALYZE,
     title=responses_analysis_title(),
-    on_load=[MainState.init],
+    on_load=[MainState.init, AnalysisState.on_load],
 )
 @template
 def _responses_analysis() -> rx.Component:
