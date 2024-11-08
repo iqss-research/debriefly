@@ -5,7 +5,7 @@ import logging
 import reflex as rx
 from debriefly.reflex.form_designer import constants, routes, style, utils
 from debriefly.reflex.form_designer.components import field_prompt
-from debriefly.reflex.backend.models import Form, Response, FieldValue
+from debriefly.reflex.backend.models import Form, Response, FieldType, FieldValue
 from debriefly.reflex.backend.backend import MainState as AppState
 
 logger = logging.getLogger(__name__)
@@ -47,15 +47,21 @@ class ResponsesState(AppState):
 
     async def index(self):
         if self.form_id != "":
-            logger.info(f"Starting indexing for form {self.form_id}")
-            with rx.session() as session:
-                form = session.get(Form, self.form_id)
-                form.index()
-                session.add(form)
-                session.commit()
-            return rx.toast.success(
-                "Indexing complete. Please refresh the page in a couple of minutes and the Analyze button should be available."
-            )
+            if self.index_is_current:
+                if not self.index_is_available:
+                    return rx.toast.info(
+                        "Please wait for a couple of minutes for the index to be available."
+                    )
+            else:
+                logger.info(f"Starting indexing for form {self.form_id}")
+                with rx.session() as session:
+                    form = session.get(Form, self.form_id)
+                    form.index()
+                    session.add(form)
+                    session.commit()
+                return rx.toast.info(
+                    "Please wait for a couple of minutes for the index to be created."
+                )
 
     def load_responses(self):
         with rx.session() as session:
@@ -88,29 +94,47 @@ class ResponsesState(AppState):
             return ResponsesState.load_responses
 
     def download(self):
+        fields = [
+            f
+            for f in self.form.fields
+            if f.type_ not in (FieldType.static, FieldType.pagebreak)
+        ]
+
+        header = [
+            "Response ID",
+            "Submitted",
+            "Client Token",
+        ]
+        for field in fields:
+            header.append(field.name)
+            if field.debriefing:
+                header.append(f"{field.name}_debriefing")
+
         with io.StringIO() as f:
             writer = csv.writer(f)
-            writer.writerow(
-                [
-                    "Response ID",
-                    "Submitted",
-                    "Client Token",
-                    "Question",
-                    "Answer",
-                    "Debriefing",
-                ]
-            )
+            writer.writerow(header)
             for response in self.responses:
-                for field_value in response.field_values:
-                    fields = [
-                        response.id,
-                        response.ts,
-                        response.client_token,
-                        field_value.field.name,
-                        field_value.value,
-                        field_value.debriefing,
+                row = [
+                    response.id,
+                    response.ts,
+                    response.client_token,
+                ]
+                for field in fields:
+                    field_value = [
+                        fv for fv in response.field_values if fv.field.id == field.id
                     ]
-                    writer.writerow(fields)
+
+                    if len(field_value) == 0:
+                        row.append("")
+                        if field.debriefing:
+                            row.append("")
+                    else:
+                        row.append(field_value[0].value)
+                        if field.debriefing:
+                            row.append(field_value[0].debriefing)
+
+                writer.writerow(row)
+
             return rx.download(
                 data=f.getvalue(), filename=f"{self.form.name}_responses.csv"
             )
@@ -230,38 +254,18 @@ def responses_page(**props):
         rx.flex(
             rx.heading(ResponsesState.form.name),
             rx.spacer(),
-            rx.cond(
-                ResponsesState.index_is_current,
-                rx.alert_dialog.root(
-                    rx.alert_dialog.trigger(
-                        rx.button(rx.icon("refresh-ccw"), color_scheme="green"),
-                    ),
-                    rx.alert_dialog.content(
-                        rx.alert_dialog.title("Update Index"),
-                        rx.alert_dialog.description(
-                            "The index is current and doesn't need to be updated. Are you sure you want to update it?"
-                        ),
-                        rx.flex(
-                            rx.alert_dialog.cancel(rx.button("Cancel")),
-                            rx.spacer(),
-                            rx.alert_dialog.action(
-                                rx.button("Update", on_click=ResponsesState.index)
-                            ),
-                        ),
-                    ),
-                ),
-                rx.button(
-                    rx.icon("refresh-ccw"),
-                    color_scheme="tomato",
-                    on_click=ResponsesState.index,
-                ),
-            ),
             rx.tooltip(
-                rx.button(
-                    rx.icon("play"),
-                    disabled=~ResponsesState.index_is_available,
-                    on_click=rx.redirect(
-                        routes.form_responses_analyze(ResponsesState.form.id)
+                rx.cond(
+                    ResponsesState.index_is_current & ResponsesState.index_is_available,
+                    rx.button(
+                        rx.icon("play"),
+                        on_click=rx.redirect(
+                            routes.form_responses_analyze(ResponsesState.form.id)
+                        ),
+                    ),
+                    rx.button(
+                        rx.icon("play"),
+                        on_click=ResponsesState.index,
                     ),
                 ),
                 content="Analyze",

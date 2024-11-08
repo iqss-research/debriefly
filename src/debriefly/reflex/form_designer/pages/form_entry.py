@@ -1,5 +1,5 @@
 import logging
-import datetime
+from datetime import datetime, timezone
 import reflex as rx
 from sqlmodel import select
 from debriefly.reflex.form_designer import routes, style
@@ -82,7 +82,7 @@ class FormEntryState(rx.State):
                                 FieldValue(field_id=field.id, value=form_data[key])
                             )
 
-                response.ts = datetime.datetime.now()
+                response.ts = datetime.now(timezone.utc)
                 session.add(response)
                 session.commit()
 

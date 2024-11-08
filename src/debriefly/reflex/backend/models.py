@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from sqlmodel import Field
 import reflex as rx
@@ -126,7 +126,7 @@ class Form(rx.Model, table=True):
             )
             client.delete_index()
             client.upload(self.debriefing_transcripts())
-            self.indexed_ts = datetime.now()
+            self.indexed_ts = datetime.now(timezone.utc)
 
     def debriefing_transcripts(self) -> dict[str, str]:
         transcripts = {}

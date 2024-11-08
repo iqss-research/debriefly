@@ -54,9 +54,31 @@ def chat() -> rx.Component:
     )
 
 
+def insert_chat_button(txts: list[str]) -> rx.Component:
+    return rx.hstack(
+        rx.foreach(
+            txts,
+            lambda txt: rx.button(
+                txt,
+                size="1",
+                variant="soft",
+                color_scheme="gray",
+                radius="full",
+                on_click=AnalysisState.process_question({"question": txt}),
+            ),
+        )
+    )
+
+
 def action_bar() -> rx.Component:
     return rx.center(
         rx.vstack(
+            insert_chat_button(
+                [
+                    "Enumerate the topic of the responses!",
+                    "Give me the summary of the data",
+                ]
+            ),
             rx.chakra.form(
                 rx.chakra.form_control(
                     rx.hstack(
@@ -67,7 +89,7 @@ def action_bar() -> rx.Component:
                                     content="Enter a question to get a response.",
                                 )
                             ),
-                            placeholder="Can you summarize the data for me?",
+                            placeholder="Type something..",
                             id="question",
                             width=["15em", "20em", "45em", "50em", "50em", "50em"],
                         ),
@@ -91,15 +113,6 @@ def action_bar() -> rx.Component:
             ),
             align_items="center",
         ),
-        position="sticky",
-        bottom="0",
-        left="0",
-        padding_y="16px",
-        backdrop_filter="auto",
-        backdrop_blur="lg",
-        border_top=f"1px solid {rx.color('mauve', 3)}",
-        background_color=rx.color("mauve", 2),
-        align_items="stretch",
         width="100%",
     )
 
