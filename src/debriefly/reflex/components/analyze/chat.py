@@ -75,7 +75,7 @@ def action_bar() -> rx.Component:
         rx.vstack(
             insert_chat_button(
                 [
-                    "Enumerate the topic of the responses!",
+                    "Enumerate the topic of the responses",
                     "Give me the summary of the data",
                 ]
             ),
