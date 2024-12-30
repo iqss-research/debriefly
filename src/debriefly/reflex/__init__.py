@@ -1,8 +1,22 @@
 import reflex as rx
 from debriefly.reflex import styles
-import debriefly.reflex.pages  # noqa
 from debriefly.reflex.backend.backend import MainState
 
+try:
+    import debriefly.reflex.pages  # noqa
+except ValueError as e:
+    """ "
+    ClerkProvider doesn't work at import time if the appropriate envvars
+    are not set to their correct value. Since this interferes with basic
+    reflex operations like 'reflex db init', 'reflex db migrate' etc.,
+    we ignore any such errors during import of this module.
+    Of couse, the individual pages will still be protected as long as they
+    have the appropriate @template decorator.
+    """
+    if str(e).startswith("Clerk"):
+        pass
+    else:
+        raise
 
 # Add these dynamic route vars early, so they can be referenced in the titles.
 if "form_id" not in rx.State.__fields__:
