@@ -9,10 +9,15 @@ RUN apt-get update
 RUN apt-get install -y python3
 RUN apt-get install -y python3-pip
 RUN python3 -m pip install --upgrade pip
-RUN apt-get install -y git curl zip
+RUN apt-get install -y git curl zip vim
 
+RUN useradd -m debriefly -g root
+RUN mkdir /app && chown debriefly /app
+
+USER debriefly
+ENV PATH="/home/debriefly/.local/bin:/usr/local/bin:$PATH"
 WORKDIR /app
-COPY . .
+COPY --chown=debriefly:root . .
 
 RUN python3 -m pip install -e .
 
