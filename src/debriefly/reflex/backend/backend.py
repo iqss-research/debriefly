@@ -12,6 +12,7 @@ class MainState(rx.State):
     _user_id: str = ""
 
     user: User = User()
+    base_url: str = ""
     config: dict[str, str] = {}
 
     def _user_has_access(self, form: Form | None = None):
@@ -34,6 +35,8 @@ class MainState(rx.State):
             for config in session.exec(select(Config)):
                 logger.info("Loading config: %s", config.name)
                 self.config[config.name] = config.value
+                if config.name == "BASE_URL":
+                    self.base_url = config.value
 
     async def load_user(self):
         state = await self.get_state(clerk.ClerkState)

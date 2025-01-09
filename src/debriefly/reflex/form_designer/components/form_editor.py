@@ -114,10 +114,13 @@ def field_edit_view(field: Field):
     )
 
 
-def copy_url():
-    # TODO: Get base url from config
-    url = "https://debriefly.net" + routes.show_form(FormEditorState.form.code)
-    return rx.set_clipboard(url)
+def get_resolved_url(form_code: str) -> str:
+    return f"{AppState.base_url}{routes.show_form(form_code)}"
+
+
+def copy_url(form_code: str):
+    resolved_url = get_resolved_url(form_code)
+    return rx.set_clipboard(resolved_url)
 
 
 def form_editor():
@@ -139,7 +142,7 @@ def form_editor():
                     rx.button(
                         rx.icon("link"),
                         "Copy URL",
-                        on_click=copy_url,
+                        on_click=lambda: copy_url(FormEditorState.form.code),
                         type="button",
                     ),
                     rx.button(
