@@ -68,22 +68,22 @@ Once `uv` is installed:
     ```
     uv pip install -e . --no-deps
     ```
-   
+
 ## Running the application
 
 1. Copy the file `.env.sample` as `.env` in the same folder. Change the values in the `.env` file that are marked as placeholders, with values as `XXXX..`.
-    
+
    In particular, you will need the real values of `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. Get these values from someone on the `debriefly` development team.
 If you're comfortable with setting up a new project on [Clerk](https://www.clerk.dev/), you can create a new project and get the keys yourself.
 
-    **Never commit the `.env` file to the repository**. 
+    **Never commit the `.env` file to the repository**.
 
 
 2. In the *activated virtual environment* (see the Installation section above), run the following bash helper script to start the application:
    ```
    ./debriefly
    ```
-   
+
    This step creates and seeds a local sqlite database (`debriefly.db`) with some starter values, and runs the Reflex application on port 3000.
 
 3. Navigate to [http://localhost:3000](http://localhost:3000) in your browser to see the application running.
