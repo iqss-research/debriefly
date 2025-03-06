@@ -1,53 +1,110 @@
-[![Tests](https://github.com/iqss-research/debrief/actions/workflows/tests.yml/badge.svg)](https://github.com/iqss-research/debrief/actions/workflows/tests.yml)
+# Debriefly
 
-# debriefly
+Debriefly is a web application written using the [Reflex](https://reflex.dev/) framework to manage Cognitive Debriefing Surveys.
 
+A live version of debriefly is currently deployed as [https://www.debriefly.net](https://www.debriefly.net). This deployment uses the [NERC Openshift Platform](https://nerc-project.github.io/nerc-docs/openshift/get-started/openshift-overview/).
+
+Before you can start tweaking `debriefly` code, you should install, run and test the application locally. The following documentation details the procedure for doing so. In particular, **this is not a tutorial on Reflex or Openshift**.
+Please refer to Reflex or Openshift documentation for more information on those topics.
 
 ## Installation
 
-```bash
-pip install -e ".[dev]"
-```
+Ensure that your system meets the following prerequisites:
 
-## Setup
+- Python 3.12 or later
+- Pip package manager
 
-Create a `.env` file at the root of the project, specify the values for
-the variables `Q_API_TOKEN` and `Q_DATA_CENTER`.
+Clone the repository and enter it:
+   ```
+   git clone https://github.com/iqss-research/debriefly
+   cd debriefly
+   ```
 
-```
-Q_API_TOKEN=<your-api-token>
-Q_DATA_CENTER=<your-data-center-id>
-```
+### Creating a debriefly environment
 
-`Q_API_TOKEN` can be obtained
-from the Qualtrics system by going to your profile (top right) -> Account Settings
--> User Settings -> API. Copy the value for the `Token` field (click `Generate Token` if you dont' see one).
+All of `debriefly`'s dependencies are on [PyPI](https://pypi.org/). We have developed and tested `debriefly` on Python 3.12, but it should work on later Python versions as well.
+You can create a new virtual environment using `venv`, and install dependencies using `pip`.
 
-On the same page, `Datacenter ID` is the value you need to use for the `Q_DATA_CENTER` variable.
-## Usage
+1. Verify that Python 3.12 or newer is installed on your system.
+   ```
+   python --version
+   ```
 
-### Create survey
+2. Create a new environment and activate it.
+   ```
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
 
-To create a single-text-question Qualtrics survey:
+3. In the activated environment, install all of `debriefly`'s dependencies.
+    ```
+    pip install -r requirements.txt
+    ```
 
-```bash
-debriefly create --name Hello --question_text "How is it going?"
-```
+4. In the activated environment, install the debriefly package in editable mode.
+    ```
+    pip install -e . --no-deps
+    ```
 
-This creates a new survey with the name `Hello` and a single question with the text `How is it going?`.
-The survey ID of the created survey is printed to the console.
+### Using a different Python version than the system default
 
-### Take a survey
+If your Python version is not 3.12 or later, or if you're getting errors when using a non-tested Python version, we recommend using the [uv](https://github.com/astral-sh/uv) tool to create a virtual environment with the correct Python version.
+`uv` is quick to [install](https://github.com/astral-sh/uv?tab=readme-ov-file#installation) and easy to use, both locally as well as on research clusters.
 
-To respond to a Qualtrics survey, note the survey ID from the output of the `debriefly create` command.
-Otherwise, you can obtain the survey ID from Qualtrics. When editing the survey in Qualtrics,
-your browser address bar will typically look like `https:/...qualtrics.com/survey-builder/SV_8ADyCPrFttPUPJA/edit`.
-The `SV_8ADyCPrFttPUPJA` part is the `Survey ID`.
+Once `uv` is installed:
 
-```bash
-debriefly run --survey_id SV_8ADyCPrFttPUPJA
-```
+1. Create a new environment with Python 3.12 and activate it.
+   ```
+   uv venv --python 3.12
+   source .venv/bin/activate
+   ```
 
-This starts the survey in the terminal where you can respond to individual questions. The survey need not have been created
-using `debriefly create`, and can be a pre-existing survey. *Note that only text questions and single-answer multiple-choice questions
-are supported at the moment, and having any other type of questions in your survey will not work.*
+2. In the activated environment, install all of `debriefly`'s dependencies.
+    ```
+    uv pip install -r requirements.txt
+    ```
+
+3. In the activated environment, install the debriefly package in editable mode.
+    ```
+    uv pip install -e . --no-deps
+    ```
+
+## Running the application
+
+1. Copy the file `.env.sample` as `.env` in the same folder. Change the values in the `.env` file that are marked as placeholders, with values as `XXXX..`.
+
+   In particular, you will need the real values of `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. Get these values from someone on the `debriefly` development team.
+If you're comfortable with setting up a new project on [Clerk](https://www.clerk.dev/), you can create a new project and get the keys yourself.
+
+    **Never commit the `.env` file to the repository**.
+
+
+2. In the *activated virtual environment* (see the Installation section above), run the following bash helper script to start the application:
+   ```
+   ./debriefly
+   ```
+
+   This step creates and seeds a local sqlite database (`debriefly.db`) with some starter values, and runs the Reflex application on port 3000.
+
+3. Navigate to [http://localhost:3000](http://localhost:3000) in your browser to see the application running.
+
+4. Modifying the code will automatically reload the application in the browser. As a trivial example, on the `Surveys` page (which should be available at [http://localhost:3000/edit/form](http://localhost:3000/edit/form),
+lets try to change the title of the button from `New Survey` to `New Survey!`.
+
+   Modify the file `src/debriefly/reflex/form_designer/pages/form_editor.py` to change the following code that renders a button:
+   ```python
+      rx.button(
+        "New Survey",
+        on_click=rx.redirect(routes.FORM_EDIT_NEW),
+        type="button",
+      ),
+   ```
+   to
+   ```python
+      rx.button(
+        "New Survey!",
+        on_click=rx.redirect(routes.FORM_EDIT_NEW),
+        type="button",
+      ),
+   ```
+   You should see the button label change in your browser.

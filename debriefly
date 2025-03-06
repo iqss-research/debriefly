@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Create the database if it doesn't already exist
+reflex db init
+# Detect any changes to the database schema (any changes we make to src/debriefly/reflex/models.py)
+# and write the changes in the `alembic` folder as incremental schema updates.
+reflex db makemigrations
+# Actually apply the schema updates to the database
+reflex db migrate
+# Seed the database with some initial data
+python scripts/seed_data.py
+
+# Run the Reflex application
+reflex run

@@ -15,3 +15,7 @@
 __pycache__
 __pycache__/
 assets/external/
+
+# Never commit the local database (only for development)
+# Let the user create a new one if necessary
+reflex.db
