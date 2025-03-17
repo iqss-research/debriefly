@@ -91,7 +91,8 @@ If you're comfortable with setting up a new project on [Clerk](https://www.clerk
 4. Modifying the code will automatically reload the application in the browser. As a trivial example, on the `Surveys` page (which should be available at [http://localhost:3000/edit/form](http://localhost:3000/edit/form),
 lets try to change the title of the button from `New Survey` to `New Survey!`.
 
-   Modify the file `src/debriefly/reflex/form_designer/pages/form_editor.py` to change the following code that renders a button:
+   Modify the file `src/debriefly/reflex/form_designer/pages/form_editor.py` to change the following code that renders a button. Do this in a separate terminal window from where you ran `./debriefly` before, so that we don't kill the running web application.
+   
    ```python
       rx.button(
         "New Survey",
@@ -107,4 +108,4 @@ lets try to change the title of the button from `New Survey` to `New Survey!`.
         type="button",
       ),
    ```
-   You should see the button label change in your browser.
+   You should see the button label change in your browser. Give it a few seconds since `reflex` will detect changes in the python code and compile it to React code.
