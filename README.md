@@ -16,7 +16,7 @@ Ensure that your system meets the following prerequisites:
 
 Clone the repository and enter it:
    ```
-   git clone https://github.com/iqss-research/debriefly
+   git clone git@github.com:iqss-research/debriefly.git
    cd debriefly
    ```
 
