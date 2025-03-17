@@ -92,7 +92,7 @@ If you're comfortable with setting up a new project on [Clerk](https://www.clerk
 lets try to change the title of the button from `New Survey` to `New Survey!`.
 
    Modify the file `src/debriefly/reflex/form_designer/pages/form_editor.py` to change the following code that renders a button. Do this in a separate terminal window from where you ran `./debriefly` before, so that we don't kill the running web application.
-   
+
    ```python
       rx.button(
         "New Survey",
