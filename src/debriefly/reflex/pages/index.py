@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
 import reflex as rx
 from debriefly.reflex.template import template
+from debriefly.reflex.form_designer import style
+from pathlib import Path
 
 # from debriefly.reflex.views.analyze import main as analyze_main
 from debriefly.reflex.backend.backend import MainState
@@ -11,9 +13,27 @@ load_dotenv()
 @rx.page(route="/", title="Debriefly", on_load=[MainState.init])
 @template
 def index() -> rx.Component:
-    return rx.vstack(
-        rx.heading("Welcome to Debriefly"),
-        rx.text("This is an app under construction.."),
+    index_content = Path(__file__).resolve().parent.parent.parent / "reflex/pages/index.md"
+    
+    # Custom styles for markdown content
+    markdown_styles = {
+        "h2": {
+            "margin_bottom": "0.5em",  # Reduce space after h2
+        },
+        "h3": {
+            "margin_top": "0.5em",     # Reduce space before h3
+            "margin_bottom": "0.5em",  # Reduce space after h3
+        },
+        "ol": {
+            "margin_top": "0.5em",     # Control list spacing
+        }
+    }
+    
+    return style.layout(
+        rx.markdown(
+            index_content.read_text(),
+            custom_styles=markdown_styles,
+        )
     )
 
 

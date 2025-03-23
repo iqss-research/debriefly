@@ -1,4 +1,7 @@
 import json
+from typing import Optional
+import time
+from datetime import datetime, timezone
 
 import openai
 import reflex as rx
@@ -22,13 +25,12 @@ from debriefly.reflex.form_designer import routes
 
 logger = logging.getLogger(__name__)
 
-
 class QA(rx.Base):
     question: str
     answer: str
 
-
 class ChatState(MainState):
+    chat_start_time: Optional[float] = None  # Unix timestamp when chat starts
     loaded: bool = False
     this_form_id: int = -1  # populated on on_load
     this_form_code: str = ""  # populated on on_load
@@ -39,11 +41,44 @@ class ChatState(MainState):
     done: bool = False  # done with current chat?
     system_message: str
     initial_message: str
+    field: Field = Field(min_debriefing_time=0)  # Default value to avoid None
+    show_finish: bool = False  # New state variable to control visibility
+
+    def set_show_finish(self):
+        """Set show_finish to True."""
+        self.show_finish = True
+        logger.info("Set show_finish to True")
+
+    def check_min_time_reached(self):
+        """Check if the minimum debriefing time has been reached."""
+        logger.info("check_min_time_reached called")
+        min_time = 0
+        if hasattr(self.field, 'min_debriefing_time') and self.field.min_debriefing_time is not None:
+            min_time = self.field.min_debriefing_time
+            
+        if min_time <= 0:
+            logger.info("No minimum time required, showing finish button")
+            self.show_finish = True
+            return True
+            
+        if not self.chat_start_time:
+            logger.info("No chat start time, not showing finish button yet")
+            return False
+            
+        elapsed = time.time() - self.chat_start_time
+        logger.info(f"Elapsed time: {elapsed}, min time: {min_time}")
+        
+        if elapsed >= min_time:
+            logger.info("Minimum time reached, showing finish button")
+            self.show_finish = True
+            return True
+        return False
 
     async def on_load(self):
-
         logger.info("ChatState on_load")
         self.done = False
+        self.chat_start_time = time.time()
+        self.show_finish = False
 
         state = await self.get_state(FormEntryState)
         self.client_token = state._ensure_client_token()
@@ -54,59 +89,78 @@ class ChatState(MainState):
         )
 
         with rx.session() as session:
-            response_id = (
-                session.exec(
-                    select(Response)
-                    .where(Response.client_token == self.client_token)
-                    .where(Response.form_id == self.this_form_id)
+            response = session.exec(
+                select(Response)
+                .where(Response.client_token == self.client_token)
+                .where(Response.form_id == self.this_form_id)
+            ).first()
+            if response is None:
+                # Create a new Response if none exists
+                response = Response(
+                    client_token=self.client_token,
+                    form_id=self.this_form_id,
+                    ts=datetime.now(timezone.utc)
                 )
-                .first()
-                .id
-            )
+                session.add(response)
+                session.commit()
+                session.refresh(response)
+                logger.info(f"Created new response with ID {response.id}")
+            response_id = response.id
             logger.info(f"Obtained response_id: {response_id}")
 
             state = await self.get_state(FormEntryTabState)
             field_id = state.fields[state.active_tab][-1].id
-            field_type = state.fields[state.active_tab][-1].type_
+            self.field = session.exec(select(Field).where(Field.id == field_id)).first()
+            if self.field is None:
+                logger.error(f"No field found with ID {field_id}")
+                self.loaded = True
+                return
+            field_type = self.field.type_
             field_value = session.exec(
                 select(FieldValue)
                 .where(FieldValue.response_id == response_id)
                 .where(FieldValue.field_id == field_id)
             ).first()
-            field_value_id = field_value.id
+            if field_value is None:
+                logger.error(f"No field value found for field ID {field_id} and response ID {response_id}")
+                self.loaded = True
+                return
+            self.field_value_id = field_value.id
             field_value_value_id = field_value.value
 
             if field_type in (FieldType.radio, FieldType.checkbox):
-                field_value_label = (
-                    session.exec(
-                        select(Option)
-                        .where(Option.field_id == field_id)
-                        .where(
-                            or_(
-                                Option.value == field_value_value_id,
-                                Option.label == field_value_value_id,
-                            )
+                option = session.exec(
+                    select(Option)
+                    .where(Option.field_id == field_id)
+                    .where(
+                        or_(
+                            Option.value == field_value_value_id,
+                            Option.label == field_value_value_id,
                         )
                     )
-                    .first()
-                    .label
-                )
+                ).first()
+                if option is None:
+                    field_value_label = field_value_value_id
+                else:
+                    field_value_label = option.label
             else:
                 field_value_label = field_value_value_id
             logger.info(
-                f"Obtained {field_id=}, {field_value_id=}, {field_value_label=} for debriefing"
+                f"Obtained {field_id=}, {self.field_value_id=}, {field_value_label=} for debriefing"
             )
-            self.field_value_id = field_value_id
+            logger.info(f"chat_start_time: {self.chat_start_time}, min_debriefing_time: {self.field.min_debriefing_time}")
+            if self.field.min_debriefing_time is None or self.field.min_debriefing_time == 0:
+                self.show_finish = True
+                logger.info("No minimum time, show_finish set to True")
             self.loaded = True
+            logger.info(f"ChatState loaded: self.loaded = {self.loaded}")
 
             env = Environment(
                 loader=PackageLoader("debriefly.data.templates", package_path=""),
                 autoescape=select_autoescape(),
             )
 
-            debriefing_field_prompt = (
-                session.exec(select(Field).where(Field.id == field_id)).first().prompt
-            )
+            debriefing_field_prompt = self.field.prompt
             debriefing_field_value = field_value_label
 
             kwargs = {
@@ -114,17 +168,17 @@ class ChatState(MainState):
                 "response": debriefing_field_value,
                 "end_of_survey_token": "<end_of_chat>",
             }
-            self.system_message = env.get_template("system_message.jinja").render(
-                **kwargs
-            )
-            self.initial_message = env.get_template("initial_message.jinja").render(
-                **kwargs
-            )
+            self.system_message = env.get_template("system_message.jinja").render(**kwargs)
+            self.initial_message = env.get_template("initial_message.jinja").render(**kwargs)
             self.chat = [QA(question="", answer=self.initial_message)]
+            
+            # Check immediately if no minimum time
+            if self.field.min_debriefing_time is None or self.field.min_debriefing_time == 0:
+                self.show_finish = True
 
     async def process_question(self, form_data: dict[str, str]):
-        question = form_data["question"]
-        if question == "":
+        question = form_data.get("question")
+        if question is None or question == "":
             return
 
         model = self.openai_process_question
@@ -132,7 +186,6 @@ class ChatState(MainState):
             yield value
 
     async def openai_process_question(self, question: str):
-
         client = get_client(
             initial_message=self.initial_message,
             system_message=self.system_message,
@@ -174,10 +227,9 @@ class ChatState(MainState):
                 temperature=client.temperature,
                 stream=True,
             )
-        # seen to be raised on content filtering
         except openai.BadRequestError as e:
             logger.error(f"OpenAI API error: {e}")
-            # remove the last user message that caused the error
+            # Remove the last user message that caused the error
             self.chat = self.chat[:-1]
             self.processing = False
             return
@@ -188,12 +240,9 @@ class ChatState(MainState):
                 continue
             if hasattr(item.choices[0].delta, "content"):
                 answer_text = item.choices[0].delta.content
-                # Ensure answer_text is not None before concatenation
                 if answer_text is not None:
                     self.chat[-1].answer += answer_text
                 else:
-                    # Handle the case where answer_text is None, perhaps log it or assign a default value
-                    # For example, assigning an empty string if answer_text is None
                     answer_text = ""
                     self.chat[-1].answer += answer_text
                 self.chat = self.chat
@@ -208,7 +257,7 @@ class ChatState(MainState):
                     select(FieldValue).where(FieldValue.id == self.field_value_id)
                 ).first()
 
-                # filter out any system messages and save to db
+                # Filter out system messages and save to db
                 messages = [msg for msg in messages if msg["role"] != "system"]
                 field_value.debriefing = json.dumps(messages)
                 session.add(field_value)
@@ -223,17 +272,13 @@ class ChatState(MainState):
                         routes.show_form(self.this_form_code) + "?continue=yes"
                     )
                 else:
-                    # TODO: duplicated code from form_entry.py
                     state = await self.get_state(FormEntryState)
                     if state.is_preview:
                         logger.info("Preview mode, deleting saved response")
                         with rx.session() as session:
                             response = session.exec(
                                 select(Response)
-                                .where(
-                                    Response.client_token
-                                    == state._ensure_client_token()
-                                )
+                                .where(Response.client_token == state._ensure_client_token())
                                 .where(Response.form_id == state.form.id)
                             ).first()
                             if response is not None:
@@ -244,3 +289,90 @@ class ChatState(MainState):
 
         # Toggle the processing flag.
         self.processing = False
+
+    async def on_unload(self):
+        self.done = True
+
+    async def finish_chat(self):
+        min_time = 0
+        if hasattr(self.field, 'min_debriefing_time') and self.field.min_debriefing_time is not None:
+            min_time = self.field.min_debriefing_time
+            
+        if min_time > 0 and self.chat_start_time:
+            elapsed = time.time() - self.chat_start_time
+            if elapsed < min_time:
+                yield rx.toast.error("Minimum debriefing time has not been reached yet.")
+                return
+
+        self.done = True
+        with rx.session() as session:
+            field_value = session.exec(
+                select(FieldValue).where(FieldValue.id == self.field_value_id)
+            ).first()
+            # Save the current chat messages
+            messages = [
+                {"role": "assistant", "content": self.initial_message},
+            ]
+            for qa in self.chat[1:]:
+                messages.append({"role": "user", "content": qa.question})
+                messages.append({"role": "assistant", "content": qa.answer})
+            field_value.debriefing = json.dumps(messages)
+            session.add(field_value)
+            session.commit()
+
+            logger.info("Saved debriefing to db")
+            state = await self.get_state(FormEntryTabState)
+            await state.advance()
+            if not state.is_beyond_last_tab:
+                logger.info("Continuing to form entry page")
+                yield rx.redirect(
+                    routes.show_form(self.this_form_code) + "?continue=yes"
+                )
+            else:
+                state = await self.get_state(FormEntryState)
+                if state.is_preview:
+                    logger.info("Preview mode, deleting saved response")
+                    with rx.session() as session:
+                        response = session.exec(
+                            select(Response)
+                            .where(Response.client_token == state._ensure_client_token())
+                            .where(Response.form_id == state.form.id)
+                        ).first()
+                        if response is not None:
+                            session.delete(response)
+                            session.commit()
+                logger.info("Redirecting to done screen")
+                yield rx.redirect(routes.FORM_ENTRY_SUCCESS)
+
+    @rx.var
+    def can_finish_chat(self) -> bool:
+        min_time = 0
+        if hasattr(self.field, 'min_debriefing_time') and self.field.min_debriefing_time is not None:
+            min_time = self.field.min_debriefing_time
+            
+        if min_time <= 0:
+            return True
+        if not self.chat_start_time:
+            return False
+        elapsed = time.time() - self.chat_start_time
+        return elapsed >= min_time
+
+    @rx.var
+    def show_timer(self) -> bool:
+        """Check if the timer should be displayed."""
+        min_time = 0
+        if hasattr(self.field, 'min_debriefing_time') and self.field.min_debriefing_time is not None:
+            min_time = self.field.min_debriefing_time
+        return min_time > 0
+        
+    @rx.var
+    def time_remaining(self) -> int:
+        """Calculate remaining time in seconds."""
+        min_time = 0
+        if hasattr(self.field, 'min_debriefing_time') and self.field.min_debriefing_time is not None:
+            min_time = self.field.min_debriefing_time
+            
+        if min_time <= 0 or not self.chat_start_time:
+            return 0
+        elapsed = time.time() - self.chat_start_time
+        return max(0, int(min_time - elapsed))

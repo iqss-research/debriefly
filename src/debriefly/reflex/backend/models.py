@@ -51,6 +51,7 @@ class Field(rx.Model, table=True):
     type_: FieldType = FieldType.text
     required: bool = False
     debriefing: bool = False
+    min_debriefing_time: Optional[int] = None
     prompt: str = ""
     ordering: float = 0.0
 
@@ -74,6 +75,7 @@ class Form(rx.Model, table=True):
     name: str = ""
     code: str = ""
     user_id: str = sqlmodel.Field(foreign_key="user.user_id")
+    show_submission_code: bool = sqlmodel.Field(default=False)
 
     fields: list[Field] = sqlmodel.Relationship(
         sa_relationship_kwargs={

@@ -252,29 +252,44 @@ def responses_page(**props):
     return style.layout(
         rx.link("< Edit", href=routes.edit_form(ResponsesState.form.id)),
         rx.flex(
-            rx.heading(ResponsesState.form.name),
+            rx.heading(f"Results for {ResponsesState.form.name}"),
             rx.spacer(),
             rx.tooltip(
                 rx.cond(
                     ResponsesState.index_is_current & ResponsesState.index_is_available,
                     rx.button(
-                        rx.icon("play"),
+                        rx.hstack(
+                            rx.icon("play"),
+                            rx.text("Analyze Transcripts with AI"),
+                            spacing="2",
+                        ),
                         on_click=rx.redirect(
                             routes.form_responses_analyze(ResponsesState.form.id)
                         ),
                     ),
                     rx.button(
-                        rx.icon("play"),
+                        rx.hstack(
+                            rx.icon("play"),
+                            rx.text("Analyze Transcripts with AI"),
+                            spacing="2",
+                        ),
                         on_click=ResponsesState.index,
                     ),
                 ),
-                content="Analyze",
+                content="Analyze responses with AI",
             ),
             rx.tooltip(
-                rx.button(rx.icon("download"), on_click=ResponsesState.download),
-                content="Download CSV",
+                rx.button(
+                    rx.hstack(
+                        rx.icon("download"),
+                        rx.text("Download Responses"),
+                        spacing="2",
+                    ),
+                    on_click=ResponsesState.download
+                ),
+                content="Download responses as CSV",
             ),
-            spacing="1",
+            spacing="3",
         ),
         responses_accordion(
             variant="outline",

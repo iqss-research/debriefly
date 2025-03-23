@@ -2,39 +2,57 @@ import reflex as rx
 import reflex_clerk as clerk
 from debriefly import __version__
 from debriefly.reflex import styles
-
+from debriefly.reflex.form_designer.components.form_select import FormSelectState
+from debriefly.reflex.form_designer import routes
+from debriefly.reflex.form_designer.components.form_editor import FormEditorState
+import uuid
+from debriefly.reflex.backend.models import Form
+from debriefly.reflex.backend.backend import MainState
 
 pages = [
-    # (Title, link, icon, clerk permission (if any) or "")
     ("Home", "/", "home", ""),
     ("Surveys", "/edit/form", "shield-question", ""),
-    ("User", "/user", "user", ""),
+    ("Feedback", "/feedback", "message_square", "", False),
     ("Config", "/config", "cog", "org:app:admin"),
 ]
 
-
-def clerk_navbar() -> rx.Component:
-    return rx.vstack(
-        clerk.signed_out(
-            clerk.sign_in_button(rx.button("Sign In")),
-            clerk.sign_up_button(rx.button("Sign Up")),
-        ),
-        clerk.signed_in(rx.box(clerk.user_button(), clerk.organization_switcher())),
-    )
-
-
 def info_footer() -> rx.Component:
-    return rx.vstack(clerk_navbar(), rx.text(f"{__version__}", width="100%"))
-
+    return rx.vstack(
+        rx.hstack(
+            clerk.signed_out(
+                clerk.sign_in_button(rx.button("Sign In")),
+                clerk.sign_up_button(rx.button("Sign Up")),
+            ),
+            clerk.signed_in(
+                rx.box(
+                    clerk.user_button(),
+                    clerk.protect(
+                        clerk.organization_switcher(),
+                        permission="org:app:admin",
+                    ),
+                )
+            ),
+        ),
+        rx.text(
+            f"v{__version__} | ",
+            rx.link(
+                "Terms of Service",
+                href="/terms",
+                target="_blank",
+                color=styles.text_color,
+                _hover={"color": styles.accent_text_color},
+            ),
+            size="1",  # Ensures very small font
+            width="100%",
+        ),
+        width="100%",
+    )
 
 def sidebar_item_icon(icon: str) -> rx.Component:
     return rx.icon(icon, size=18)
 
-
 def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
-    # Whether the item is active.
     active = rx.State.router.page.path == url.lower()
-
     return rx.link(
         rx.hstack(
             sidebar_item_icon(icon),
@@ -68,50 +86,131 @@ def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
             border_radius=styles.border_radius,
             width="100%",
             spacing="2",
-            padding="0.35em",
+            padding="0.35em 0.5em",  # Adjusted padding for consistent left alignment
         ),
         underline="none",
         href=url,
         width="100%",
     )
 
-
 def sidebar() -> rx.Component:
     return rx.flex(
         rx.vstack(
             rx.heading("Debriefly", align="left"),
+            sidebar_item("Home", "/", "home"),
+            # Create Survey section
             rx.vstack(
-                *[
-                    rx.cond(
-                        pages[3] == "",  # no permission specified
-                        sidebar_item(text=page[0], url=page[1], icon=page[2]),
-                        clerk.protect(
-                            sidebar_item(text=page[0], url=page[1], icon=page[2]),
-                            permission=page[3],
-                        ),
-                    )
-                    for page in pages
-                ],
+                rx.hstack(
+                    rx.icon("pen", size=18),
+                    rx.text("Create Survey", weight="bold"),
+                    align="center",
+                    spacing="2",
+                    padding_left="0.5em",  # Align with sidebar items
+                ),
+                rx.input(
+                    placeholder="New Survey Name",
+                    value=SidebarState.new_survey_name,
+                    on_change=SidebarState.set_new_survey_name,
+                    width="100%",
+                ),
+                rx.button(
+                    "New Survey",
+                    on_click=SidebarState.create_new_survey,
+                    width="100%",
+                    color_scheme="blue",
+                ),
                 spacing="1",
-                width="100%",
+                width="100%",  # Ensure full width
             ),
+            # Existing Surveys section
+            rx.vstack(
+                rx.hstack(
+                    rx.icon("folder", size=18),
+                    rx.text("Existing Surveys", weight="bold"),
+                    align="center",
+                    spacing="2",
+                    padding_left="0.5em",  # Align with sidebar items
+                ),
+                rx.foreach(
+                    FormSelectState.forms,
+                    lambda form: rx.hstack(
+                        rx.link(
+                            rx.text(form.name),
+                            href=routes.edit_form(form.id),
+                            color=rx.cond(
+                                rx.State.form_id == form.id.to_string(),
+                                styles.accent_text_color,
+                                styles.text_color,
+                            ),
+                            width="100%",
+                        ),
+                        rx.button(
+                            rx.icon(
+                                tag = "delete",
+                                color = "red.500",
+                                cursor = "pointer",
+                                size=16,
+                                _hover={"color": "red.700"},
+                            ),
+                            on_click=SidebarState.delete_survey(form.id),
+                            variant="ghost",
+                            size="sm",
+                        ),
+                        align="center",
+                        justify="between",
+                        width="100%",
+                        padding_left="0.5em",  # Align with other items
+                    ),
+                ),
+                spacing="1",
+                width="100%",  # Ensure full width
+            ),
+            sidebar_item("Feedback", "/feedback", "message_square"),
             rx.spacer(),
             rx.divider(),
             info_footer(),
             justify="end",
             align="start",
-            width=styles.sidebar_content_width,
+            width="100%",  # Stretch content to full width
             height="100dvh",
-            padding="1em",
+            padding="1em 0.5em",  # Adjusted padding for consistency
         ),
         display=["flex"],
-        max_width=styles.sidebar_width,
-        width="auto",
+        width=styles.sidebar_width,  # Fixed width to match intended size
         height="100%",
         position="sticky",
-        justify="end",
+        justify="start",  # Align content to the left
         top="0px",
         left="0px",
-        flex="1",
-        bg=rx.color("gray", 2),
+        flex="0 0 auto",
+        bg=rx.color("gray", 2),  # Matches your screenshot
     )
+
+class SidebarState(MainState):
+    new_survey_name: str = ""
+
+    def set_new_survey_name(self, value: str):
+        self.new_survey_name = value
+
+    async def create_new_survey(self):
+        if self.new_survey_name:
+            with rx.session() as session:
+                new_form = Form(
+                    name=self.new_survey_name,
+                    user_id=self.user_id,
+                    code=uuid.uuid4().hex
+                )
+                session.add(new_form)
+                session.commit()
+                session.refresh(new_form)
+            yield FormSelectState.load_forms
+            yield rx.redirect(routes.edit_form(new_form.id))
+            self.new_survey_name = ""
+
+    async def delete_survey(self, form_id: int):
+        with rx.session() as session:
+            form = session.get(Form, form_id)
+            if form and form.user_id == self.user_id:
+                session.delete(form)
+                session.commit()
+            yield FormSelectState.load_forms

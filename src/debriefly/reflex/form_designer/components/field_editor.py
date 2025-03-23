@@ -5,24 +5,60 @@ from debriefly.reflex.backend.models import Field, FieldType, Option
 from debriefly.reflex.backend.backend import MainState as AppState
 from debriefly.reflex.form_designer.components.form_editor import FormEditorState
 from debriefly.reflex.form_designer.components.field_view import field_input
+import uuid
+from debriefly.reflex.backend.models import Form
 
+display_names = {
+    "text": "Small Text Area",
+    "radio": "Radio Buttons",
+    "checkbox": "Checkboxes",
+    "textarea": "Large Text Area",
+}
+
+tooltips = {
+    "question_identifier": "A unique identifier for the question (not shown to users)",
+    "question_text": "The text of the question that will be displayed to the survey participants.",
+    "answer_format": "The format in which the survey participants will provide their answers.",
+    "required": "If checked, the survey participants must answer this question to proceed.",
+    "debriefing": "If checked, this question will be used for automated cognitive debriefing purposes.",
+    "answer_options": "The list of options for the survey participants to choose from (for radio or checkbox formats).",
+}
 
 class FieldEditorState(AppState):
     """Handle editing of a single field."""
 
-    field: Field = Field()
+    field: Field = Field(min_debriefing_time=1800)
     form_owner_id: int = -1
-    options_editor_open: bool = False
     field_editor_open: bool = False
+
+    @rx.var
+    def min_debriefing_time_in_minutes(self) -> int:
+        """Convert min_debriefing_time from seconds to minutes for display."""
+        return self.field.min_debriefing_time // 60 if self.field.min_debriefing_time is not None else 1
+
+    def increment_min_time(self):
+        """Increase the minimum debriefing time by 1 minute."""
+        current_time = self.field.min_debriefing_time or 0
+        self.field.min_debriefing_time = current_time + 60  # Add 1 minute (60 seconds)
+
+    def decrement_min_time(self):
+        """Decrease the minimum debriefing time by 1 minute, not below 0."""
+        current_time = self.field.min_debriefing_time or 0
+        new_time = current_time - 60
+        self.field.min_debriefing_time = max(0, new_time)  # Prevent negative values
 
     def _user_has_access(self):
         return self.form_owner_id == self.user_id
 
     def handle_submit(self, form_data: dict[str, str]):
-        self.field.name = form_data["field_name"]
-        self.field.type_ = form_data["type_"]
-        self.field.required = bool(form_data.get("required"))
-        self.field.debriefing = bool(form_data.get("debriefing"))
+        if self.field.type_ == FieldType.static:
+            self.field.prompt = form_data["prompt"]
+        else:
+            self.field.name = form_data["field_name"]
+            self.field.type_ = form_data["type_"]
+            self.field.required = bool(form_data.get("required"))
+            self.field.debriefing = bool(form_data.get("debriefing"))
+
         self.field_editor_open = False
         return [
             FormEditorState.update_field(self.field),
@@ -46,10 +82,12 @@ class FieldEditorState(AppState):
         if not self._user_has_access():
             return
         if self.field_id == "new":
-            self.field = Field(form_id=self.form_id)
+            self.field = Field(form_id=self.form_id, min_debriefing_time=1800)
         else:
             with rx.session() as session:
                 self.field = session.get(Field, self.field_id)
+                if self.field.min_debriefing_time is None:
+                    self.field.min_debriefing_time = 1800
         self.field_editor_open = True
 
     def set_type(self, type_: str):
@@ -101,6 +139,21 @@ class FieldEditorState(AppState):
             session.commit()
             session.refresh(self.field)
 
+    def open_new_static_field(self):
+        """Create a new static field and open the editor modal."""
+        self.field = Field(form_id=self.form_id, type_=FieldType.static)
+        self.field_editor_open = True
+
+    def handle_required_change(self, is_checked: bool):
+        """Update the 'Required' field only if 'Debriefing' is not selected."""
+        if not self.field.debriefing:
+            self.field.required = is_checked
+
+    def handle_debriefing_change(self, is_checked: bool):
+        """Update 'Debriefing' and enforce 'Required' when 'Debriefing' is checked."""
+        self.field.debriefing = is_checked
+        if is_checked:
+            self.field.required = True  # Automatically set 'Required' to True
 
 def field_is_enumerated_cond(
     if_enumerated: rx.Component | rx.Var,
@@ -147,42 +200,6 @@ def option_editor(option: Option, index: int):
     )
 
 
-def options_editor():
-    return rx.form(
-        rx.vstack(
-            rx.scroll_area(
-                rx.vstack(
-                    rx.foreach(FieldEditorState.field.options, option_editor),
-                ),
-                max_height="60vh",
-            ),
-            rx.hstack(
-                rx.icon_button(
-                    "plus",
-                    on_click=FieldEditorState.add_option().prevent_default,
-                    type="submit",
-                ),
-                rx.dialog.close(rx.button("Done")),
-                justify="between",
-            ),
-        ),
-    )
-
-
-def options_editor_modal():
-    return rx.dialog.root(
-        rx.dialog.content(
-            rx.dialog.title("Edit Options"),
-            rx.container(
-                options_editor(),
-                stack_children_full_width=True,
-            ),
-        ),
-        open=FieldEditorState.options_editor_open,
-        on_open_change=FieldEditorState.set_options_editor_open,
-    )
-
-
 def field_editor_input(key: str):
     return rx.el.label(
         key.capitalize(),
@@ -225,88 +242,204 @@ def field_editor_input_prompt(key: str):
 
 
 def field_editor():
-    return rx.fragment(
-        rx.form(
+    return rx.form(
+        rx.hstack(
+            # Left column: Question details
             rx.vstack(
-                field_editor_input("name"),
-                field_editor_input_prompt("prompt"),
-                rx.hstack(
-                    "Type",
+                # Question Identifier (formerly Name)
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Question Identifier", weight="bold"),
+                        rx.tooltip(
+                            rx.icon("info", size=16),
+                            content=tooltips["question_identifier"],
+                        ),
+                        align="center",
+                    ),
+                    rx.input(
+                        placeholder="Question Identifier",
+                        name="field_name",
+                        value=FieldEditorState.field.name,
+                        on_change=lambda v: FieldEditorState.set_field("name", v),
+                        width="100%",
+                    ),
+                    width="100%",
+                ),
+                # Question Text (formerly Prompt)
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Question Text", weight="bold"),
+                        rx.tooltip(
+                            rx.icon("info", size=16),
+                            content=tooltips["question_text"],
+                        ),
+                        align="center",
+                    ),
+                    rx.match(
+                        FieldEditorState.field.type_,
+                        (
+                            FieldType.static.value,
+                            rx.text_area(
+                                placeholder="Question Text",
+                                name="field_prompt",
+                                value=FieldEditorState.field.prompt,
+                                on_change=lambda v: FieldEditorState.set_field("prompt", v),
+                                width="100%",
+                            ),
+                        ),
+                        rx.input(
+                            placeholder="Question Text",
+                            name="field_prompt",
+                            value=FieldEditorState.field.prompt,
+                            on_change=lambda v: FieldEditorState.set_field("prompt", v),
+                            width="100%",
+                        ),
+                    ),
+                    width="100%",
+                ),
+                # Answer Format (formerly Type)
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Answer Format", weight="bold"),
+                        rx.tooltip(
+                            rx.icon("info", size=16),
+                            content=tooltips["answer_format"],
+                        ),
+                        align="center",
+                    ),
                     rx.select.root(
                         rx.select.trigger(),
                         rx.select.content(
                             *[
-                                rx.select.item(t.value, value=t.value or "unset")
+                                rx.select.item(display_names.get(t.value, t.value), value=t.value)
                                 for t in FieldType
+                                if t not in [FieldType.static, FieldType.pagebreak]
                             ],
                         ),
                         name="type_",
                         value=FieldEditorState.field.type_.to(str),
                         on_change=FieldEditorState.set_type,
                     ),
-                    field_is_enumerated_cond(
-                        rx.button(
-                            "Edit Options",
-                            on_click=FieldEditorState.set_options_editor_open(True),
-                            type="button",
-                            size="1",
-                        ),
-                    ),
-                    rx.spacer(),
-                    rx.el.label(
-                        "Ordering",
-                        rx.input(
-                            placeholder="0.0",
-                            name="field_ordering",
-                            value=FieldEditorState.field.ordering,
-                            on_change=lambda v: FieldEditorState.set_field(
-                                "ordering", v
-                            ),
-                            width="100px",
-                        ),
-                    ),
                     rx.cond(
                         (FieldEditorState.field.type_ != FieldType.static.value)
                         & (FieldEditorState.field.type_ != FieldType.pagebreak.value),
-                        rx.box(
-                            rx.checkbox(
-                                "Required",
-                                name="required",
-                                checked=FieldEditorState.field.required,
-                                on_change=FieldEditorState.handle_required_change,
+                        rx.vstack(
+                            # Required checkbox with tooltip
+                            rx.hstack(
+                                rx.checkbox(
+                                    "Required",
+                                    name="required",
+                                    checked=FieldEditorState.field.required,
+                                    on_change=FieldEditorState.handle_required_change,
+                                ),
+                                rx.tooltip(
+                                    rx.icon("info", size=16),
+                                    content=tooltips["required"],
+                                ),
+                                rx.cond(
+                                    FieldEditorState.field.debriefing,
+                                    rx.text("(automatically required for debriefing)", size="1", color="gray"),
+                                ),
+                                align="center",
                             ),
-                            rx.checkbox(
-                                "Debriefing",
-                                name="debriefing",
-                                checked=FieldEditorState.field.debriefing,
-                                on_change=FieldEditorState.handle_debriefing_change,
+                            # Debriefing checkbox with tooltip
+                            rx.hstack(
+                                rx.checkbox(
+                                    "Debriefing",
+                                    name="debriefing",
+                                    checked=FieldEditorState.field.debriefing,
+                                    on_change=FieldEditorState.handle_debriefing_change,
+                                ),
+                                rx.tooltip(
+                                    rx.icon("info", size=16),
+                                    content=tooltips["debriefing"],
+                                ),
+                                align="center",
+                            ),
+                            # Minimum Time input for debriefing
+                            rx.cond(
+                                FieldEditorState.field.debriefing,
+                                rx.hstack(
+                                    rx.text("Minimum Time (minutes)"),
+                                    rx.button(
+                                        "-",
+                                        on_click=FieldEditorState.decrement_min_time,
+                                        type="button",  # Prevent form submission
+                                    ),
+                                    rx.text(FieldEditorState.min_debriefing_time_in_minutes.to_string()),
+                                    rx.button(
+                                        "+",
+                                        on_click=FieldEditorState.increment_min_time,
+                                        type="button",  # Prevent form submission
+                                    ),
+                                    spacing="2",
+                                ),
                             ),
                         ),
                     ),
-                    align="center",
+                    align="start",
                 ),
-                field_is_enumerated_cond(
-                    rx.scroll_area(
-                        field_input(FieldEditorState.field, editing=True),
-                        max_height="200px",
-                    ),
-                ),
-                rx.button("Save", type="submit"),
+                width="50%",  # Adjust width as needed
                 align="start",
             ),
-            on_submit=FieldEditorState.handle_submit,
+            # Right column: Answer Options panel for radio and checkbox
+            field_is_enumerated_cond(
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Answer Options", weight="bold"),
+                        rx.tooltip(
+                            rx.icon("info", size=16),
+                            content=tooltips["answer_options"],
+                        ),
+                        align="center",
+                    ),
+                    rx.scroll_area(
+                        rx.vstack(
+                            rx.foreach(FieldEditorState.field.options, option_editor),
+                        ),
+                        max_height="200px",
+                    ),
+                    rx.hstack(
+                        rx.button(
+                            rx.icon("plus", size=16),
+                            rx.text("Add Option"),
+                            on_click=FieldEditorState.add_option,
+                            type="button",
+                            variant="outline",
+                            size="sm",
+                        ),
+                        justify="start",
+                    ),
+                    width="50%",  # Adjust width as needed
+                    align="start",
+                ),
+            ),
+            spacing="4",
+            width="100%",
         ),
-        field_is_enumerated_cond(options_editor_modal()),
+        rx.hstack(
+            rx.dialog.close(rx.button("CANCEL")),
+            rx.button("SAVE", type="submit"),
+            justify="end",
+            width="100%",
+        ),
+        on_submit=FieldEditorState.handle_submit,
     )
 
 
 def field_editor_modal():
     return rx.dialog.root(
         rx.dialog.content(
-            rx.dialog.title("Edit Question"),
-            rx.container(
-                field_editor(),
-                stack_children_full_width=True,
+            rx.cond(
+                FieldEditorState.field.type_ == FieldType.static.value,
+                rx.vstack(
+                    rx.dialog.title("Edit Plain Text (Markdown)"),
+                    static_field_editor(),
+                ),
+                rx.vstack(
+                    rx.dialog.title("Edit Question"),
+                    field_editor(),
+                ),
             ),
         ),
         open=FieldEditorState.field_editor_open,
@@ -334,3 +467,45 @@ def field_edit_title():
         ),
     )
     return f"{constants.TITLE} | {form_name} | {field_name}"
+
+
+def static_field_editor():
+    return rx.form(
+        rx.input(
+            type="hidden",
+            name="prompt",
+            value=FieldEditorState.field.prompt,
+            style={"display": "none"},
+        ),
+        rx.vstack(
+            rx.tabs.root(
+                rx.tabs.list(
+                    rx.tabs.trigger("Edit", value="edit"),
+                    rx.tabs.trigger("Preview", value="preview"),
+                ),
+                rx.tabs.content(
+                    rx.text_area(
+                        name="prompt",
+                        placeholder="Your text content...",
+                        value=FieldEditorState.field.prompt,
+                        on_change=lambda v: FieldEditorState.set_field("prompt", v),
+                        width="100%",
+                        min_height="200px",
+                        resize="vertical",
+                    ),
+                    value="edit",
+                ),
+                rx.tabs.content(
+                    rx.markdown(FieldEditorState.field.prompt),
+                    value="preview",
+                ),
+                default_value="edit",
+                width="100%",
+            ),
+            rx.hstack(
+                rx.dialog.close(rx.button("CANCEL")),
+                rx.button("SAVE", type="submit"),
+            ),
+        ),
+        on_submit=FieldEditorState.handle_submit,
+    )

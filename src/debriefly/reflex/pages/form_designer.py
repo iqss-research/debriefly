@@ -119,21 +119,46 @@ def _form_entry_chat() -> rx.Component:
 )
 def _form_entry_success() -> rx.Component:
     return style.layout(
-        rx.card(
-            rx.box(
-                rx.box(
-                    rx.text("Thank you for your responses. Your submission code is ")
-                ),
-                rx.box(
-                    rx.button(
-                        rx.icon("copy"),
-                        FormEntryState.client_token,
-                        on_click=lambda: rx.set_clipboard(ChatState.client_token),
-                        type="button",
+        rx.cond(
+            FormEntryState.form.show_submission_code,
+            rx.cond(
+                FormEntryState.is_preview,
+                rx.card(
+                    rx.box(
+                        rx.text("Thank you for your responses. If you need to get paid, you need the following submission code:"),
+                        rx.button(
+                            rx.icon("copy"),
+                            rx.text("[user id will be shown here]"),
+                        ),
                     ),
-                    margin="20px",
+                    text_align="center",
+                ),
+                rx.card(
+                    rx.box(
+                        rx.text("Thank you for your responses. If you need to get paid, you need the following submission code:"),
+                        rx.button(
+                            rx.icon("copy"),
+                            FormEntryState.client_token,
+                            on_click=lambda: rx.set_clipboard(FormEntryState.client_token),
+                        ),
+                    ),
+                    text_align="center",
                 ),
             ),
-            text_align="center",
+            rx.card(
+                rx.box(
+                    rx.text("Thank you for your responses. You can now close this browser window."),
+                ),
+                text_align="center",
+            ),
         ),
+        rx.button(
+                    "Close Survey",
+                    on_click=rx.call_script("window.close()"),
+                    color_scheme="green",
+                    variant="solid",
+                    padding="0.75em 1.5em",
+                    font_size="lg",
+                    _hover={"background_color": "green.600"},
+            ),
     )
