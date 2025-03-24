@@ -125,7 +125,9 @@ def _form_entry_success() -> rx.Component:
                 FormEntryState.is_preview,
                 rx.card(
                     rx.box(
-                        rx.text("Thank you for your responses. If you need to get paid, you need the following submission code:"),
+                        rx.text(
+                            "Thank you for your responses. If you need to get paid, you need the following submission code:"
+                        ),
                         rx.button(
                             rx.icon("copy"),
                             rx.text("[user id will be shown here]"),
@@ -135,11 +137,15 @@ def _form_entry_success() -> rx.Component:
                 ),
                 rx.card(
                     rx.box(
-                        rx.text("Thank you for your responses. If you need to get paid, you need the following submission code:"),
+                        rx.text(
+                            "Thank you for your responses. If you need to get paid, you need the following submission code:"
+                        ),
                         rx.button(
                             rx.icon("copy"),
                             FormEntryState.client_token,
-                            on_click=lambda: rx.set_clipboard(FormEntryState.client_token),
+                            on_click=lambda: rx.set_clipboard(
+                                FormEntryState.client_token
+                            ),
                         ),
                     ),
                     text_align="center",
@@ -147,18 +153,20 @@ def _form_entry_success() -> rx.Component:
             ),
             rx.card(
                 rx.box(
-                    rx.text("Thank you for your responses. You can now close this browser window."),
+                    rx.text(
+                        "Thank you for your responses. You can now close this browser window."
+                    ),
                 ),
                 text_align="center",
             ),
         ),
         rx.button(
-                    "Close Survey",
-                    on_click=rx.call_script("window.close()"),
-                    color_scheme="green",
-                    variant="solid",
-                    padding="0.75em 1.5em",
-                    font_size="lg",
-                    _hover={"background_color": "green.600"},
-            ),
+            "Close Survey",
+            on_click=rx.call_script("window.close()"),
+            color_scheme="green",
+            variant="solid",
+            padding="0.75em 1.5em",
+            font_size="lg",
+            _hover={"background_color": "green.600"},
+        ),
     )

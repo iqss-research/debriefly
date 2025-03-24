@@ -13,22 +13,24 @@ load_dotenv()
 @rx.page(route="/", title="Debriefly", on_load=[MainState.init])
 @template
 def index() -> rx.Component:
-    index_content = Path(__file__).resolve().parent.parent.parent / "reflex/pages/index.md"
-    
+    index_content = (
+        Path(__file__).resolve().parent.parent.parent / "reflex/pages/index.md"
+    )
+
     # Custom styles for markdown content
     markdown_styles = {
         "h2": {
             "margin_bottom": "0.5em",  # Reduce space after h2
         },
         "h3": {
-            "margin_top": "0.5em",     # Reduce space before h3
+            "margin_top": "0.5em",  # Reduce space before h3
             "margin_bottom": "0.5em",  # Reduce space after h3
         },
         "ol": {
-            "margin_top": "0.5em",     # Control list spacing
-        }
+            "margin_top": "0.5em",  # Control list spacing
+        },
     }
-    
+
     return style.layout(
         rx.markdown(
             index_content.read_text(),

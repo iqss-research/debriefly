@@ -202,20 +202,20 @@ def form_entry_page():
     return style.layout(
         rx.form(
             rx.cond(
-            FormEntryState.is_preview,
-            rx.hstack(
-                rx.button(
-                    "Close Survey (Preview Only)",
-                    on_click=rx.call_script("window.close()"),
-                    color_scheme="green",
-                    variant="solid",
-                    padding="0.75em 1.5em",
-                    font_size="lg",
-                    _hover={"background_color": "green.600"},
-                ),
-                justify="space_between",
-                width="100%",
-                margin_bottom="1em",
+                FormEntryState.is_preview,
+                rx.hstack(
+                    rx.button(
+                        "Close Survey (Preview Only)",
+                        on_click=rx.call_script("window.close()"),
+                        color_scheme="green",
+                        variant="solid",
+                        padding="0.75em 1.5em",
+                        font_size="lg",
+                        _hover={"background_color": "green.600"},
+                    ),
+                    justify="space_between",
+                    width="100%",
+                    margin_bottom="1em",
                 ),
             ),
             rx.vstack(

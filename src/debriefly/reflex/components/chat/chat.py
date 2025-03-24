@@ -10,6 +10,7 @@ message_style = dict(
     max_width=["30em", "30em", "50em", "50em", "50em", "50em"],
 )
 
+
 def message(qa: QA) -> rx.Component:
     return rx.box(
         rx.cond(
@@ -38,6 +39,7 @@ def message(qa: QA) -> rx.Component:
         width="100%",
     )
 
+
 def chat() -> rx.Component:
     return rx.vstack(
         rx.box(
@@ -53,6 +55,7 @@ def chat() -> rx.Component:
         padding_bottom="5em",
     )
 
+
 def action_bar() -> rx.Component:
     return rx.center(
         rx.vstack(
@@ -62,7 +65,7 @@ def action_bar() -> rx.Component:
                 rx.box(
                     rx.text(
                         "Now, you can finish your conversation. You are of course more than welcome to keep the conversation.",
-                        color="green"
+                        color="green",
                     ),
                     id="finish_message",
                     padding="0.5em",
@@ -126,10 +129,11 @@ def action_bar() -> rx.Component:
         backdrop_filter="auto",
         backdrop_blur="lg",
         border_top=f"1px solid {rx.color('mauve', 3)}",
-        background_color=rx.color('mauve', 2),
+        background_color=rx.color("mauve", 2),
         align_items="stretch",
         width="100%",
     )
+
 
 def chat_ui() -> rx.Component:
     return rx.cond(
@@ -141,7 +145,8 @@ def chat_ui() -> rx.Component:
             rx.vstack(
                 chat(),
                 action_bar(),
-                rx.script("""
+                rx.script(
+                    """
                     if (!window.timerInterval) {
                         function checkAndActivateFinish() {
                             const chatElement = document.getElementById('chat_ui');
@@ -158,11 +163,11 @@ def chat_ui() -> rx.Component:
                                 console.error("Error checking time:", e);
                             }
                         }
-                        
+
                         checkAndActivateFinish();
-                        
+
                         window.timerInterval = setInterval(checkAndActivateFinish, 1000);
-                        
+
                         window.addEventListener('beforeunload', function() {
                             if (window.timerInterval) {
                                 clearInterval(window.timerInterval);
@@ -170,9 +175,10 @@ def chat_ui() -> rx.Component:
                             }
                         });
                     }
-                """),
+                """
+                ),
                 # Disabling the timer (it is for debugging purposes)
-                #rx.cond(
+                # rx.cond(
                 #    ChatState.show_timer,
                 #    rx.cond(
                 #        ~ChatState.show_finish,
@@ -185,7 +191,7 @@ def chat_ui() -> rx.Component:
                 #            margin_top="8px",
                 #        ),
                 #    ),
-                #),
+                # ),
                 id="chat_ui",  # Add this line
                 height="100%",
             ),
