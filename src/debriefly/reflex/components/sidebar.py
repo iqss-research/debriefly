@@ -4,7 +4,8 @@ from debriefly import __version__
 from debriefly.reflex import styles
 from debriefly.reflex.form_designer.components.form_select import FormSelectState
 from debriefly.reflex.form_designer import routes
-from debriefly.reflex.form_designer.components.form_editor import FormEditorState
+
+# from debriefly.reflex.form_designer.components.form_editor import FormEditorState
 import uuid
 from debriefly.reflex.backend.models import Form
 from debriefly.reflex.backend.backend import MainState
@@ -15,6 +16,7 @@ pages = [
     ("Feedback", "/feedback", "message_square", "", False),
     ("Config", "/config", "cog", "org:app:admin"),
 ]
+
 
 def info_footer() -> rx.Component:
     return rx.vstack(
@@ -48,8 +50,10 @@ def info_footer() -> rx.Component:
         width="100%",
     )
 
+
 def sidebar_item_icon(icon: str) -> rx.Component:
     return rx.icon(icon, size=18)
+
 
 def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
     active = rx.State.router.page.path == url.lower()
@@ -92,6 +96,7 @@ def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
         href=url,
         width="100%",
     )
+
 
 def sidebar() -> rx.Component:
     return rx.flex(
@@ -145,7 +150,7 @@ def sidebar() -> rx.Component:
                             width="100%",
                         ),
                         # Delete button on the sidebar. Disabled for now.
-                        #rx.alert_dialog.root(
+                        # rx.alert_dialog.root(
                         #    rx.alert_dialog.trigger(
                         #        rx.button(
                         #            rx.icon(
@@ -174,7 +179,7 @@ def sidebar() -> rx.Component:
                         #            ),
                         #        ),
                         #    ),
-                        #),
+                        # ),
                         align="center",
                         justify="between",
                         width="100%",
@@ -205,6 +210,7 @@ def sidebar() -> rx.Component:
         bg=rx.color("gray", 2),  # Matches your screenshot
     )
 
+
 class SidebarState(MainState):
     new_survey_name: str = ""
 
@@ -217,7 +223,7 @@ class SidebarState(MainState):
                 new_form = Form(
                     name=self.new_survey_name,
                     user_id=self.user_id,
-                    code=uuid.uuid4().hex
+                    code=uuid.uuid4().hex,
                 )
                 session.add(new_form)
                 session.commit()

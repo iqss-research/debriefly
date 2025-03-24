@@ -21,7 +21,9 @@ from debriefly.reflex.pages.form_designer import (
     _form_entry_success,
     _responses,
 )
+
 from debriefly.reflex.pages.feedback import feedback_page
+
 from debriefly.reflex.pages.terms import terms_of_service
 
 # specify pages that are loaded by default
@@ -39,4 +41,5 @@ __all__ = [
     "_form_entry_success",
     "_responses",
     "terms_of_service",
+    "feedback_page",
 ]

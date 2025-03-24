@@ -77,7 +77,7 @@ class ResponsesState(AppState):
 
     def load_responses(self):
         with rx.session() as session:
-            self.response_debriefings = {} # reset debriefings
+            self.response_debriefings = {}  # reset debriefings
             form = session.get(Form, self.form_id)
             if not self._user_has_access(form) or form is None:
                 self.form = Form()
@@ -151,13 +151,16 @@ class ResponsesState(AppState):
             return rx.download(
                 data=f.getvalue(), filename=f"{self.form.name}_responses.csv"
             )
+
     def download_transcripts(self):
         transcript_text = ""
         for response in self.responses:
             transcript_text += f"--- Response {response.client_token} ---\n\n"
             for field in self.form.fields:
                 if field.debriefing:  # Only process debriefing fields
-                    messages = self.response_debriefings.get(response.id, {}).get(field.id, [])
+                    messages = self.response_debriefings.get(response.id, {}).get(
+                        field.id, []
+                    )
                     if messages:  # Only include fields with chat content
                         transcript_text += f"Field: {field.name}\n\n"
                         for msg in messages:
@@ -287,7 +290,9 @@ def responses_page(**props):
             rx.hstack(
                 rx.tooltip(
                     rx.cond(
-                        ResponsesState.index_is_current & ResponsesState.index_is_available & ResponsesState.has_chat_responses,
+                        ResponsesState.index_is_current
+                        & ResponsesState.index_is_available
+                        & ResponsesState.has_chat_responses,
                         rx.button(
                             rx.hstack(
                                 rx.icon("play"),
@@ -316,7 +321,7 @@ def responses_page(**props):
                                 ),
                                 color_scheme="gray",
                                 on_click=ResponsesState.index,
-                            )
+                            ),
                         ),
                     ),
                     content="Analyze Debriefing Transcripts with AI",
@@ -329,7 +334,7 @@ def responses_page(**props):
                             spacing="2",
                         ),
                         color_scheme="green",
-                        on_click=ResponsesState.download
+                        on_click=ResponsesState.download,
                     ),
                     content="Download all the results (including metadata) as CSV",
                 ),
@@ -341,7 +346,7 @@ def responses_page(**props):
                             spacing="2",
                         ),
                         color_scheme="purple",
-                        on_click=ResponsesState.download_transcripts
+                        on_click=ResponsesState.download_transcripts,
                     ),
                     content="Download chat transcripts as one .txt file. You can paste this to LLM (e.g., ChatGPT) to analyze.",
                 ),

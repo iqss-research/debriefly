@@ -4,9 +4,10 @@ from debriefly.reflex.form_designer import constants, routes, utils
 from debriefly.reflex.backend.models import Field, FieldType, Option
 from debriefly.reflex.backend.backend import MainState as AppState
 from debriefly.reflex.form_designer.components.form_editor import FormEditorState
-from debriefly.reflex.form_designer.components.field_view import field_input
-import uuid
-from debriefly.reflex.backend.models import Form
+
+# from debriefly.reflex.form_designer.components.field_view import field_input
+# import uuid
+# from debriefly.reflex.backend.models import Form
 
 display_names = {
     "text": "Small Text Area",
@@ -24,6 +25,7 @@ tooltips = {
     "answer_options": "The list of options for the survey participants to choose from (for radio or checkbox formats).",
 }
 
+
 class FieldEditorState(AppState):
     """Handle editing of a single field."""
 
@@ -34,7 +36,11 @@ class FieldEditorState(AppState):
     @rx.var
     def min_debriefing_time_in_minutes(self) -> int:
         """Convert min_debriefing_time from seconds to minutes for display."""
-        return self.field.min_debriefing_time // 60 if self.field.min_debriefing_time is not None else 1
+        return (
+            self.field.min_debriefing_time // 60
+            if self.field.min_debriefing_time is not None
+            else 1
+        )
 
     def increment_min_time(self):
         """Increase the minimum debriefing time by 1 minute."""
@@ -65,11 +71,11 @@ class FieldEditorState(AppState):
             rx.redirect(routes.edit_form(self.form_id)),
         ]
 
-    def handle_required_change(self, is_checked: bool):
-        self.field.required = is_checked
+    # def handle_required_change(self, is_checked: bool):
+    #    self.field.required = is_checked
 
-    def handle_debriefing_change(self, is_checked: bool):
-        self.field.debriefing = is_checked
+    # def handle_debriefing_change(self, is_checked: bool):
+    #    self.field.debriefing = is_checked
 
     def handle_modal_open_change(self, is_open: bool):
         self.field_editor_open = is_open
@@ -154,6 +160,7 @@ class FieldEditorState(AppState):
         self.field.debriefing = is_checked
         if is_checked:
             self.field.required = True  # Automatically set 'Required' to True
+
 
 def field_is_enumerated_cond(
     if_enumerated: rx.Component | rx.Var,
@@ -283,7 +290,9 @@ def field_editor():
                                 placeholder="Question Text",
                                 name="field_prompt",
                                 value=FieldEditorState.field.prompt,
-                                on_change=lambda v: FieldEditorState.set_field("prompt", v),
+                                on_change=lambda v: FieldEditorState.set_field(
+                                    "prompt", v
+                                ),
                                 width="100%",
                             ),
                         ),
@@ -311,7 +320,9 @@ def field_editor():
                         rx.select.trigger(),
                         rx.select.content(
                             *[
-                                rx.select.item(display_names.get(t.value, t.value), value=t.value)
+                                rx.select.item(
+                                    display_names.get(t.value, t.value), value=t.value
+                                )
                                 for t in FieldType
                                 if t not in [FieldType.static, FieldType.pagebreak]
                             ],
@@ -338,7 +349,11 @@ def field_editor():
                                 ),
                                 rx.cond(
                                     FieldEditorState.field.debriefing,
-                                    rx.text("(automatically required for debriefing)", size="1", color="gray"),
+                                    rx.text(
+                                        "(automatically required for debriefing)",
+                                        size="1",
+                                        color="gray",
+                                    ),
                                 ),
                                 align="center",
                             ),
@@ -366,7 +381,9 @@ def field_editor():
                                         on_click=FieldEditorState.decrement_min_time,
                                         type="button",  # Prevent form submission
                                     ),
-                                    rx.text(FieldEditorState.min_debriefing_time_in_minutes.to_string()),
+                                    rx.text(
+                                        FieldEditorState.min_debriefing_time_in_minutes.to_string()
+                                    ),
                                     rx.button(
                                         "+",
                                         on_click=FieldEditorState.increment_min_time,

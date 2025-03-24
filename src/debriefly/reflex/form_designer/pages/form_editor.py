@@ -1,13 +1,14 @@
 import reflex as rx
 from debriefly.reflex.form_designer import routes, style
 from debriefly.reflex.form_designer.components import (
-    form_select,
+    # form_select,
     form_editor,
     field_editor_modal,
     FormEditorState,
     FieldEditorState,
 )
 from debriefly.reflex.backend.models import FieldType
+
 
 def form_editor_page() -> rx.Component:
     return style.layout(
@@ -19,7 +20,9 @@ def form_editor_page() -> rx.Component:
                     rx.tooltip(
                         rx.button(
                             "Add Question",
-                            on_click=rx.redirect(routes.edit_field(rx.State.form_id, "new")),
+                            on_click=rx.redirect(
+                                routes.edit_field(rx.State.form_id, "new")
+                            ),
                             is_disabled=rx.State.form_id == "",
                             type="button",
                         ),
@@ -28,7 +31,9 @@ def form_editor_page() -> rx.Component:
                     rx.tooltip(
                         rx.button(
                             "Add Page Break",
-                            on_click=lambda: FormEditorState.add_special_field(FieldType.pagebreak.value),
+                            on_click=lambda: FormEditorState.add_special_field(
+                                FieldType.pagebreak.value
+                            ),
                             is_disabled=rx.State.form_id == "",
                             type="button",
                             color_scheme="green",

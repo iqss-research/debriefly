@@ -54,6 +54,8 @@ class Field(rx.Model, table=True):
     min_debriefing_time: Optional[int] = None
     prompt: str = ""
     ordering: float = 0.0
+    custom_system_message: Optional[str] = None
+    custom_initial_message: Optional[str] = None
 
     form_id: int = sqlmodel.Field(foreign_key="form.id")
     options: list[Option] = sqlmodel.Relationship(

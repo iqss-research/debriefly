@@ -1,7 +1,6 @@
 import uuid
 import reflex as rx
 from debriefly.reflex.form_designer import constants, routes, utils
-from debriefly.reflex.backend.models import Field, Form
 from debriefly.reflex.backend.backend import MainState as AppState
 from debriefly.reflex.form_designer.components.field_view import (
     field_input,
@@ -97,7 +96,7 @@ class FormEditorState(AppState):
             session.delete(session.get(Field, field_id))
             session.commit()
             return FormEditorState.load_form_by_id(self.form.id)
-    
+
     def add_special_field(self, field_type: str):
         """Add a special field (page break or static text) directly without using the editor."""
         if not self._user_has_access():
@@ -117,42 +116,44 @@ class FormEditorState(AppState):
                 form_id=self.form.id,
                 ordering=len(self.form.fields) + 1,
             )
-            
+
             self.form.fields.append(new_field)
             session.add(new_field)
             session.commit()
-            
+
             return FormEditorState.load_form_by_id(self.form.id)
-    
+
     def move_field_up(self, field_id: int):
         """Move a field up in the ordering."""
         if not self._user_has_access():
             return
-        
+
         with rx.session() as session:
             # Get fields sorted by ordering
             fields = sorted(self.form.fields, key=lambda f: f.ordering)
-            
+
             # Find the field to move and its index
-            field_index = next((i for i, f in enumerate(fields) if f.id == field_id), None)
+            field_index = next(
+                (i for i, f in enumerate(fields) if f.id == field_id), None
+            )
             if field_index is None or field_index == 0:
                 return  # Field not found or already at the top
-            
+
             # Swap ordering with the field above it
             current_field = fields[field_index]
             prev_field = fields[field_index - 1]
-            
+
             # Swap their ordering values
             temp_ordering = current_field.ordering
             current_field.ordering = prev_field.ordering
             prev_field.ordering = temp_ordering
-            
+
             session.add(current_field)
             session.add(prev_field)
             session.commit()
-            
+
             return self.load_form_by_id(self.form.id)
-            
+
     def move_field_down(self, field_id: int):
         """Move a field down in the ordering."""
         if not self._user_has_access():
@@ -163,7 +164,9 @@ class FormEditorState(AppState):
             fields = sorted(self.form.fields, key=lambda f: f.ordering)
 
             # Find the field to move and its index
-            field_index = next((i for i, f in enumerate(fields) if f.id == field_id), None)
+            field_index = next(
+                (i for i, f in enumerate(fields) if f.id == field_id), None
+            )
             if field_index is None or field_index == len(fields) - 1:
                 return  # Field not found or already at the bottom
 
@@ -205,17 +208,17 @@ class FormEditorState(AppState):
             if original_form is None:
                 yield rx.toast.error("Survey not found.")
                 return
-            
+
             # Create a new form with the same fields and a new name
             new_form = Form(
                 name=f"{original_form.name}_copy",
                 user_id=self.user_id,
-                code=uuid.uuid4().hex
+                code=uuid.uuid4().hex,
             )
             session.add(new_form)
             session.commit()  # Commit to assign new_form.id
             session.refresh(new_form)
-            
+
             # Copy fields from the original form
             for field in original_form.fields:
                 new_field = Field(
@@ -225,25 +228,25 @@ class FormEditorState(AppState):
                     debriefing=field.debriefing,
                     prompt=field.prompt,
                     ordering=field.ordering,
-                    form_id=new_form.id
+                    form_id=new_form.id,
                 )
                 session.add(new_field)
                 session.flush()  # Flush to assign new_field.id before creating options
-                
+
                 # Copy options if the field has any
                 for option in field.options:
                     new_option = Option(
                         label=option.label,
                         value=option.value,
-                        field_id=new_field.id  # new_field.id is now set
+                        field_id=new_field.id,  # new_field.id is now set
                     )
                     session.add(new_option)
-            
+
             session.commit()  # Commit all changes at once
 
             # Refresh the sidebar's survey list
             yield FormSelectState.load_forms
-            
+
             # Redirect to the new survey's editing page
             yield rx.redirect(routes.edit_form(new_form.id))
 
@@ -267,7 +270,7 @@ def field_edit_view(field: Field):
                 rx.link(
                     field_prompt(field, show_name=True),
                     href=routes.edit_field(FormEditorState.form.id, field.id),
-                )
+                ),
             ),
             # Use a box with margin_left="auto" to push buttons to the right
             rx.box(
@@ -289,7 +292,7 @@ def field_edit_view(field: Field):
                     ),
                     rx.tooltip(
                         rx.button(
-                            "↓", 
+                            "↓",
                             on_click=lambda: FormEditorState.move_field_down(field.id),
                             variant="outline",
                             size="xs",
@@ -359,7 +362,9 @@ def form_editor():
             rx.tooltip(
                 rx.button(
                     "Rename",
-                    on_click=FormEditorState.set_name(FormEditorState.temp_name),  # Update name on click
+                    on_click=FormEditorState.set_name(
+                        FormEditorState.temp_name
+                    ),  # Update name on click
                     color_scheme="blue",
                 ),
                 content="Update the name of the survey.",
@@ -386,7 +391,8 @@ def form_editor():
                         rx.icon("eye"),
                         "Preview",
                         on_click=rx.redirect(
-                            routes.show_form(FormEditorState.form.code) + "?preview=yes",
+                            routes.show_form(FormEditorState.form.code)
+                            + "?preview=yes",
                             external=True,
                         ),
                         type="button",
@@ -396,7 +402,9 @@ def form_editor():
                 rx.tooltip(
                     rx.button(
                         "View Results",
-                        on_click=rx.redirect(routes.form_responses(FormEditorState.form.id)),
+                        on_click=rx.redirect(
+                            routes.form_responses(FormEditorState.form.id)
+                        ),
                     ),
                     content="View the results of the survey.",
                 ),
@@ -423,7 +431,9 @@ def form_editor():
                             rx.alert_dialog.cancel(rx.button("Cancel")),
                             rx.spacer(),
                             rx.alert_dialog.action(
-                                rx.button("Delete", on_click=FormEditorState.delete_form)
+                                rx.button(
+                                    "Delete", on_click=FormEditorState.delete_form
+                                )
                             ),
                         ),
                     ),
