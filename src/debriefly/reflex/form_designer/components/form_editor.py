@@ -356,10 +356,13 @@ def form_editor():
                 on_change=FormEditorState.set_temp_name,  # Update temp_name on change
                 flex="1",  # Make the input grow to fill available space
             ),
-            rx.button(
-                "Rename",
-                on_click=FormEditorState.set_name(FormEditorState.temp_name),  # Update name on click
-                color_scheme="blue",
+            rx.tooltip(
+                rx.button(
+                    "Rename",
+                    on_click=FormEditorState.set_name(FormEditorState.temp_name),  # Update name on click
+                    color_scheme="blue",
+                ),
+                content="Update the name of the survey.",
             ),
             align="center",
             spacing="2",
@@ -369,30 +372,42 @@ def form_editor():
         rx.cond(
             FormEditorState.form_id != "",
             rx.hstack(
-                rx.button(
-                    rx.icon("link"),
-                    "Copy URL",
-                    on_click=lambda: copy_url(FormEditorState.form.code),
-                    type="button",
-                ),
-                rx.button(
-                    rx.icon("eye"),
-                    "Preview",
-                    on_click=rx.redirect(
-                        routes.show_form(FormEditorState.form.code) + "?preview=yes",
-                        external=True,
+                rx.tooltip(
+                    rx.button(
+                        rx.icon("link"),
+                        "Copy URL",
+                        on_click=lambda: copy_url(FormEditorState.form.code),
+                        type="button",
                     ),
-                    type="button",
+                    content="Copy the survey URL to clipboard. You can give this URL to survey participants.",
                 ),
-                rx.button(
-                    "View Results",
-                    on_click=rx.redirect(routes.form_responses(FormEditorState.form.id)),
+                rx.tooltip(
+                    rx.button(
+                        rx.icon("eye"),
+                        "Preview",
+                        on_click=rx.redirect(
+                            routes.show_form(FormEditorState.form.code) + "?preview=yes",
+                            external=True,
+                        ),
+                        type="button",
+                    ),
+                    content="Preview the survey as it will appear to participants. The results are not saved.",
                 ),
-                rx.button(
-                    "Copy Survey",
-                    on_click=FormEditorState.copy_survey,
-                    type="button",
-                    color_scheme="blue",
+                rx.tooltip(
+                    rx.button(
+                        "View Results",
+                        on_click=rx.redirect(routes.form_responses(FormEditorState.form.id)),
+                    ),
+                    content="View the results of the survey.",
+                ),
+                rx.tooltip(
+                    rx.button(
+                        "Copy Survey",
+                        on_click=FormEditorState.copy_survey,
+                        type="button",
+                        color_scheme="blue",
+                    ),
+                    content="Create a copy of this survey. The copy will have the same questions, page breaks, and plain texts.",
                 ),
                 rx.spacer(),
                 rx.alert_dialog.root(

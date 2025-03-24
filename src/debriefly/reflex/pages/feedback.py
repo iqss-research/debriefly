@@ -9,11 +9,7 @@ def open_email_client():
 def open_github_issues():
     return rx.redirect("https://github.com/yourusername/debriefly/issues")
 
-@rx.page(
-    route="/feedback",
-    title="Feedback",
-    on_load=MainState.init,
-)
+@rx.page(route="/feedback", title="Feedback", on_load=[MainState.init])
 @template
 def feedback_page() -> rx.Component:
     """Render the feedback page."""

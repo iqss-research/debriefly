@@ -144,18 +144,37 @@ def sidebar() -> rx.Component:
                             ),
                             width="100%",
                         ),
-                        rx.button(
-                            rx.icon(
-                                tag = "delete",
-                                color = "red.500",
-                                cursor = "pointer",
-                                size=16,
-                                _hover={"color": "red.700"},
-                            ),
-                            on_click=SidebarState.delete_survey(form.id),
-                            variant="ghost",
-                            size="sm",
-                        ),
+                        # Delete button on the sidebar. Disabled for now.
+                        #rx.alert_dialog.root(
+                        #    rx.alert_dialog.trigger(
+                        #        rx.button(
+                        #            rx.icon(
+                        #                tag = "delete",
+                        #                color = "red.500",
+                        #                cursor = "pointer",
+                        #                size=16,
+                        #                _hover={"color": "red.700"},
+                        #            ),
+                        #            color_scheme="tomato",
+                        #            on_click=SidebarState.delete_survey(form.id),
+                        #            variant="ghost",
+                        #            size="sm",
+                        #        ),
+                        #    ),
+                        #    rx.alert_dialog.content(
+                        #        rx.alert_dialog.title("Delete Survey"),
+                        #        rx.alert_dialog.description(
+                        #            "Are you sure you want to delete this survey?"
+                        #        ),
+                        #        rx.flex(
+                        #            rx.alert_dialog.cancel(rx.button("Cancel")),
+                        #            rx.spacer(),
+                        #            rx.alert_dialog.action(
+                        #                rx.button("Delete", on_click=FormEditorState.delete_form)
+                        #            ),
+                        #        ),
+                        #    ),
+                        #),
                         align="center",
                         justify="between",
                         width="100%",
