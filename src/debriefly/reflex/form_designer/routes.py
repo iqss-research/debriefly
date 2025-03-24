@@ -7,6 +7,8 @@ FIELD_EDIT_NEW = "/edit/form/[form_id]/field/"
 FIELD_EDIT_ID = "/edit/form/[form_id]/field/[field_id]"
 RESPONSES = "/responses/[form_id]"
 RESPONSES_ANALYZE = "/responses/[form_id]/analyze"
+FEEDBACK = "/feedback"
+TERMS = "/terms"
 
 
 def edit_form(form_id: int | str):
