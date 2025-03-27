@@ -11,15 +11,17 @@ RUN apt-get install -y python3-pip
 RUN python3 -m pip install --upgrade pip
 RUN apt-get install -y git curl zip vim
 
-# https://stackoverflow.com/questions/58473832
 RUN mkdir /app
-RUN chgrp -R 0 /app && \
-    chmod -R g=u /app
-
 WORKDIR /app
 COPY . .
 
-RUN python3 -m pip install -e .
+# https://stackoverflow.com/questions/58473832
+RUN chgrp -R 0 /app && \
+    chmod -R g=u /app && \
+    chmod -R g+s /app  # reflex creates folders like .web/ etc
+
+RUN python3 -m pip install -r requirements.txt
+RUN python3 -m pip install -e . --no-deps
 
 # Needed until Reflex properly passes SIGTERM on backend.
 STOPSIGNAL SIGKILL
