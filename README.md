@@ -109,3 +109,154 @@ lets try to change the title of the button from `New Survey` to `New Survey!`.
       ),
    ```
    You should see the button label change in your browser. Give it a few seconds since `reflex` will detect changes in the python code and compile it to React code.
+
+
+## Updating the application
+
+You can make local changes and test them out. Test all possible scenarios and user interactions.
+
+Things to remember at this stage:
+
+- Always work on a new branch prefixed with your initials, e.g. `vb/ui-dropdown-fix`.
+- Always make a commit whenever development reaches a stage that you can talk about. For example, \"I implemented stage 1 of the bug fix this commit 06dea3 by adding a function.\"
+- Never implement unrelated changes in the same commit!
+- As soon as the feature/bug fix is complete, push your branch upstream. Resist the temptation to do extra work in the same branch.
+- Open a PR and get it reviewed by someone on the team.
+- If you must work on another feature/bug request while your PR is under review, open a new branch and repeat the steps.
+
+## Deployment
+
+### Push image to DockerHub
+
+Once your branch is merged to `main` and you want to do a new "release" on the server:
+
+1. Pull the `main` branch and update the `debriefly/src/debriefly/__init__.py` file to update the version. Use the `X.Y.Z` syntax. For bug fixes and minor changes, increment the patch version `Z`. For new features, increment the minor version `Y`. For breaking changes, increment the major version `X`.
+   ```
+   git pull origin main
+   vi debriefly/src/debriefly/__init__.py (make changes)
+   ```
+
+
+2. Add the changes to the repository, commit them and tag the commit with the *same* version as in the `__init__.py` file.
+   ```
+   git add debriefly/src/debriefly/__init__.py
+   git commit -m"Update version to 0.4.7"
+   git tag 0.4.7
+   ```
+
+3. Push the commit and tags upstream.
+   ```
+   git push
+   git push --tags
+   ```
+
+   This step triggers a `deploy` workflow on GitHub that builds and deploys a containerized version of the application to DockerHub. Check it out in the `Actions` tab of the repository.
+   Make sure it completes successfully.
+
+
+4. In the logs of the `deploy` workflow (click on the gear icon and then \"View raw logs\"), locate the string `containerimage.digest` and make a note of the sha256 value. You will need this later. For example, if the line says:
+   ```
+   2025-03-27T17:45:28.9415364Z   "containerimage.digest": "sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19",
+   ```
+   Copy the part `sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19` and save it for later.
+
+### Pull images on Openshift
+
+Note that there are technically [easier ways](https://crc.dev/docs/introducing/) to do the following, and ways to automate this process. However, the following instructions have been tested out and guaranteed to work.
+
+1. Login to the [NERC Openshift Platform](https://console.apps.shift.nerc.mghpcc.org/)
+
+
+2. One the left hand menu, go to `Project` and then click on `1 Deployment` on the right hand panel. The URL will look something like `https://console.apps.shift.nerc.mghpcc.org/../automated-cognitive-debriefing-6e6c7f/deployments`
+
+
+3. Change the `/deployments` in the address bar to `/imagestreams` and hit enter. *If you find an easier way to get to this URL, please update these instructions.*
+
+
+4. Go to the ImageStream called `debriefly-dockerhub` by click on it. Click on `YAML` to make tweaks to the YAML.
+
+
+5. **Be very careful** at this point. This step involves editing a YAML file and you don't want to make mistakes and bring down the whole system!
+
+
+6. Under `spec` -> `tags`, locate a section of the YAML that looks like follows. Navigate to last such section, which should correspond to the latest available version of the application on NERC. For example:
+    ```
+    - name: 0.4.6
+      annotations: null
+      from:
+        kind: DockerImage
+        name: 'docker.io/vineetbansal/debriefly:0.4.6'
+      generation: 21
+      importPolicy:
+        importMode: Legacy
+      referencePolicy:
+        type: Source
+    ```
+
+
+7. Copy over the section and paste it right below it. Update the 2 `name` fields to point to the version of the application that you deployed on DockerHub. Increment the `generation` by 1. For the example above, it will now look like:
+    ```
+    - name: 0.4.6
+      annotations: null
+      from:
+        kind: DockerImage
+        name: 'docker.io/vineetbansal/debriefly:0.4.6'
+      generation: 21
+      importPolicy:
+        importMode: Legacy
+      referencePolicy:
+        type: Source
+    - name: 0.4.7
+      annotations: null
+      from:
+        kind: DockerImage
+        name: 'docker.io/vineetbansal/debriefly:0.4.7'
+      generation: 22
+      importPolicy:
+        importMode: Legacy
+      referencePolicy:
+        type: Source
+    ```
+
+
+6. Under `status` -> `tags`, locate a section of the YAML that looks like follows. Navigate to last such section, which should correspond to the latest available version of the application on NERC. For example:
+    ```
+    - tag: 0.4.6
+      items:
+        - created: '2025-03-25T22:20:44Z'
+          dockerImageReference: 'docker.io/vineetbansal/debriefly@sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
+          image: 'sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
+          generation: 21
+    ```
+
+
+7. Copy over the section and paste it right below it. Update the `tag` fields to point to the version of the application that you deployed on DockerHub. Update the 2 `sha256:..` occurrences to match the `sha256:..` string that you copied in the `Push image to DockerHub` section. Increment the `generation` so it matches the one you created a couple of steps ago. For the example above, it will now look like:
+    ```
+    - tag: 0.4.6
+      items:
+        - created: '2025-03-25T22:20:44Z'
+          dockerImageReference: 'docker.io/vineetbansal/debriefly@sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
+          image: 'sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
+          generation: 21
+    - tag: 0.4.7
+      items:
+        - created: '2025-03-25T22:20:44Z'
+          dockerImageReference: 'docker.io/vineetbansal/debriefly@sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19'
+          image: 'sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19'
+          generation: 22
+    ```
+
+
+8. Hit `Save`.
+
+
+9. Navigate to `Project` -> `1 Deployment` -> `debriefly-dockerhub`. Click on `Actions` -> `Edit Deployment`.
+
+
+10. Under `Edit Deployment` -> `Images`, you should see the new tag under the `Tag` dropdown. Select the new tag and hit `Save`.
+
+
+#### Tips
+
+- Give the NERC Openshift Platform a few minutes to pull the new image and restart the application. You can monitor progress in the `Topology` page if you want.
+- If the application doesn't behave like you expect, you can always rollback to the previous version by selecting the previous tag from the `Tag` dropdown and hitting `Save`.
