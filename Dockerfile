@@ -19,7 +19,7 @@ RUN chgrp -R 0 /app && \
 WORKDIR /app
 COPY . .
 
-RUN python3 -m pip install -r requirements.txt
+RUN python3 -m pip install --user -r requirements.txt
 RUN python3 -m pip install -e . --no-deps
 
 # Needed until Reflex properly passes SIGTERM on backend.
