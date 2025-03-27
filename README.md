@@ -130,23 +130,27 @@ Things to remember at this stage:
 
 Once your branch is merged to `main` and you want to do a new "release" on the server:
 
-1. Pull the `main` branch and tag the commit that you want to release. Use the `X.Y.Z` syntax for the version to tag the commit. For example:
+1. Pull the `main` branch and update the `debriefly/src/debriefly/__init__.py` file to update the version. Use the `X.Y.Z` syntax. For bug fixes and minor changes, increment the patch version `Z`. For new features, increment the minor version `Y`. For breaking changes, increment the major version `X`.
    ```
    git pull origin main
-   git checkout <commit-hash>
-   git tag 0.4.5
+   vi debriefly/src/debriefly/__init__.py (make changes)
    ```
 
 
-2. For bug fixes and minor changes, increment the patch version `Z`. For new features, increment the minor version `Y`. For breaking changes, increment the major version `X`.
-
-
-3. Push the tags upstream.
+2. Add the changes to the repository, commit them and tag the commit with the *same* version as in the `__init__.py` file.
    ```
-   git push origin 0.4.5
+   git add debriefly/src/debriefly/__init__.py
+   git commit -m"Update version to 0.4.7"
+   git tag 0.4.7
    ```
 
-   This step triggers a `deploy` workflow that builds and deploys a containerized version of the application to DockerHub. Check it out in the `Actions` tab of the repository.
+3. Push the commit and tags upstream.
+   ```
+   git push
+   git push --tags
+   ```
+
+   This step triggers a `deploy` workflow on GitHub that builds and deploys a containerized version of the application to DockerHub. Check it out in the `Actions` tab of the repository.
    Make sure it completes successfully.
 
 
@@ -166,7 +170,7 @@ Note that there are technically [easier ways](https://crc.dev/docs/introducing/)
 2. One the left hand menu, go to `Project` and then click on `1 Deployment` on the right hand panel. The URL will look something like `https://console.apps.shift.nerc.mghpcc.org/../automated-cognitive-debriefing-6e6c7f/deployments`
 
 
-3. Change the `/deployments` in the address bar to `/imagestreams` and hit enter. If you find an easier way to get to this URL, please update these instructions.
+3. Change the `/deployments` in the address bar to `/imagestreams` and hit enter. *If you find an easier way to get to this URL, please update these instructions.*
 
 
 4. Go to the ImageStream called `debriefly-dockerhub` by click on it. Click on `YAML` to make tweaks to the YAML.
@@ -252,4 +256,7 @@ Note that there are technically [easier ways](https://crc.dev/docs/introducing/)
 10. Under `Edit Deployment` -> `Images`, you should see the new tag under the `Tag` dropdown. Select the new tag and hit `Save`.
 
 
-11. If the application doesn't behave like you expect, you can always rollback to the previous version by selecting the previous tag from the `Tag` dropdown and hitting `Save`.
+#### Tips
+
+- Give the NERC Openshift Platform a few minutes to pull the new image and restart the application. You can monitor progress in the `Topology` page if you want.
+- If the application doesn't behave like you expect, you can always rollback to the previous version by selecting the previous tag from the `Tag` dropdown and hitting `Save`.
