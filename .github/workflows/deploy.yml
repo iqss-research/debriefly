@@ -28,4 +28,4 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ${{ vars.DOCKERHUB_USERNAME }}/debriefly:${{ env.DOCKER_TAG }},${{ vars.DOCKERHUB_USERNAME }}/debriefly:latest
+          tags: ${{ vars.DOCKERHUB_USERNAME }}/debriefly:${{ env.DOCKER_TAG }}
