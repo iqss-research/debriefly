@@ -7,7 +7,7 @@ on:
 
 jobs:
   docker:
-    if: github.event.base_ref == 'refs/heads/main'
+    if: github.event.base_ref == 'refs/heads/vb/openshift_debug2'
     runs-on: ubuntu-latest
     steps:
       -
