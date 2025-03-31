@@ -44,7 +44,6 @@ def upgrade() -> None:
             sa.Column(
                 "show_submission_code",
                 sa.Boolean(),
-                server_default=sa.text("0"),
                 nullable=False,
             )
         )

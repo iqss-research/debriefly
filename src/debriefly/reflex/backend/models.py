@@ -77,7 +77,7 @@ class Form(rx.Model, table=True):
     name: str = ""
     code: str = ""
     user_id: str = sqlmodel.Field(foreign_key="user.user_id")
-    show_submission_code: bool = sqlmodel.Field(default=False)
+    show_submission_code: bool = False
 
     fields: list[Field] = sqlmodel.Relationship(
         sa_relationship_kwargs={
