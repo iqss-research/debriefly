@@ -124,6 +124,11 @@ Things to remember at this stage:
 - Open a PR and get it reviewed by someone on the team.
 - If you must work on another feature/bug request while your PR is under review, open a new branch and repeat the steps.
 
+### Updating models.py
+
+**Important**: If you made *any* changes to `models.py` and re-ran `./debriefly`, you would have observed that one or more `*.py` files are created in the `alembic/version` folder.
+It is important for you to add any such files to the repository, since these will be used by Docker to update the structure of the database that it is connected to.
+
 ## Deployment
 
 ### Push image to DockerHub
