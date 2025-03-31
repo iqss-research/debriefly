@@ -135,14 +135,15 @@ It is important for you to add any such files to the repository, since these wil
 
 Once your branch is merged to `main` and you want to do a new "release" on the server:
 
-1. Pull the `main` branch and update the `debriefly/src/debriefly/__init__.py` file to update the version. Use the `X.Y.Z` syntax. For bug fixes and minor changes, increment the patch version `Z`. For new features, increment the minor version `Y`. For breaking changes, increment the major version `X`.
+1. Pull the `main` branch and update the files `debriefly/src/debriefly/__init__.py` and `pyproject.toml` to update the version. Use the `X.Y.Z` syntax. Make sure you have identical versions specified in both these files. For bug fixes and minor changes, increment the patch version `Z`. For new features, increment the minor version `Y`. For breaking changes, increment the major version `X`.
    ```
    git pull origin main
    vi debriefly/src/debriefly/__init__.py (make changes)
+   vi pyproject.toml (make changes)
    ```
 
 
-2. Add the changes to the repository, commit them and tag the commit with the *same* version as in the `__init__.py` file.
+2. Add the changes to the repository, commit them and tag the commit with the *same* version as in the step above.
    ```
    git add debriefly/src/debriefly/__init__.py
    git commit -m"Update version to 0.4.7"
