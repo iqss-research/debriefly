@@ -26,6 +26,8 @@ from debriefly.reflex.pages.feedback import feedback_page
 
 from debriefly.reflex.pages.terms import terms_of_service
 
+from debriefly.reflex.pages.admin import admin
+
 # specify pages that are loaded by default
 __all__ = [
     "index",
@@ -42,4 +44,5 @@ __all__ = [
     "_responses",
     "terms_of_service",
     "feedback_page",
+    "admin",
 ]

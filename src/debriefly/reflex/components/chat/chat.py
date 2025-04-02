@@ -111,6 +111,15 @@ def action_bar() -> rx.Component:
                             ),
                             rx.fragment(),  # Empty when hidden
                         ),
+                        rx.cond(
+                            ChatState.is_preview,
+                            rx.button(
+                                "Finish Chat (Preview Only)",  # For preview mode
+                                color_scheme="green",
+                                id="finish_chat_button2",
+                                on_click=ChatState.finish_chat,
+                            ),
+                        ),
                         align_items="center",
                         spacing="2",
                     ),

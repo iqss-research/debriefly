@@ -20,12 +20,6 @@ def info_footer() -> rx.Component:
             clerk.signed_in(
                 rx.box(
                     clerk.user_button(),
-                    clerk.organization_switcher(),
-                    # Following did not work as expected. Need to make a change.
-                    #clerk.protect(
-                    #    clerk.organization_switcher(),
-                    #    permission="org:app:admin",
-                    #),
                 )
             ),
         ),
@@ -35,6 +29,13 @@ def info_footer() -> rx.Component:
                 "Terms of Service",
                 href="/terms",
                 target="_blank",
+                color=styles.text_color,
+                _hover={"color": styles.accent_text_color},
+            ),
+            " | ",  # Separator
+            rx.link(
+                "Admin",
+                href="/admin",
                 color=styles.text_color,
                 _hover={"color": styles.accent_text_color},
             ),

@@ -47,6 +47,7 @@ class ChatState(MainState):
     initial_message: str
     field: Field = Field(min_debriefing_time=0)  # Default value to avoid None
     show_finish: bool = False  # New state variable to control visibility
+    is_preview: bool = FormEntryState.is_preview  # Inherit from FormEntryState
 
     @rx.background
     async def count_time(self):
@@ -291,20 +292,6 @@ class ChatState(MainState):
         self.done = True
 
     async def finish_chat(self):
-        min_time = 0
-        if (
-            hasattr(self.field, "min_debriefing_time")
-            and self.field.min_debriefing_time is not None
-        ):
-            min_time = self.field.min_debriefing_time
-
-        if min_time > 0 and self.chat_start_time:
-            elapsed = time.time() - self.chat_start_time
-            if elapsed < min_time:
-                yield rx.toast.error(
-                    "Minimum debriefing time has not been reached yet."
-                )
-                return
 
         self.done = True
         with rx.session() as session:
