@@ -26,7 +26,7 @@ def form_name(form: Form):
 def form_select():
     return rx.box(
         rx.select.root(
-            rx.select.trigger(placeholder="Existing Surveys", width="100%"),
+            rx.select.trigger(placeholder="Select Survey", width="100%"),
             rx.select.content(
                 rx.foreach(
                     FormSelectState.forms,

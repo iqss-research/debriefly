@@ -10,7 +10,6 @@ import uuid
 from debriefly.reflex.backend.models import Form
 from debriefly.reflex.backend.backend import MainState
 
-
 def info_footer() -> rx.Component:
     return rx.vstack(
         rx.hstack(
@@ -45,10 +44,8 @@ def info_footer() -> rx.Component:
         width="100%",
     )
 
-
 def sidebar_item_icon(icon: str) -> rx.Component:
     return rx.icon(icon, size=18)
-
 
 def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
     active = rx.State.router.page.path == url.lower()
@@ -92,7 +89,6 @@ def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
         width="100%",
     )
 
-
 def sidebar() -> rx.Component:
     return rx.flex(
         rx.vstack(
@@ -100,15 +96,18 @@ def sidebar() -> rx.Component:
             sidebar_item("Home", "/", "home"),
             # Create Survey section
             rx.vstack(
-                rx.hstack(
+                rx.tooltip(
+                    rx.hstack(
                     rx.icon("pen", size=18),
                     rx.text("Create Survey", weight="bold"),
                     align="center",
                     spacing="2",
                     padding_left="0.5em",  # Align with sidebar items
+                    ),
+                    content="Enter New Survey Name and click 'New Survey' to create a new survey",
                 ),
                 rx.input(
-                    placeholder="New Survey Name",
+                    placeholder="Enter Survey Name",
                     value=SidebarState.new_survey_name,
                     on_change=SidebarState.set_new_survey_name,
                     width="100%",
@@ -124,12 +123,15 @@ def sidebar() -> rx.Component:
             ),
             # Existing Surveys section
             rx.vstack(
-                rx.hstack(
-                    rx.icon("folder", size=18),
-                    rx.text("Existing Surveys", weight="bold"),
-                    align="center",
-                    spacing="2",
-                    padding_left="0.5em",  # Align with sidebar items
+                rx.tooltip(
+                    rx.hstack(
+                        rx.icon("folder", size=18),
+                        rx.text("Existing Surveys", weight="bold"),
+                        align="center",
+                        spacing="2",
+                        padding_left="0.5em",  # Align with sidebar items
+                    ),
+                    content="Select your created surveys from below",
                 ),
                 form_select(),
                 #rx.foreach(
@@ -209,7 +211,6 @@ def sidebar() -> rx.Component:
         flex="0 0 auto",
         bg=rx.color("gray", 2),  # Matches your screenshot
     )
-
 
 class SidebarState(MainState):
     new_survey_name: str = ""

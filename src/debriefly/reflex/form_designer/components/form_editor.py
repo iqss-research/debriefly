@@ -350,28 +350,44 @@ def copy_url(form_code: str):
 
 
 def form_editor():
+    markdown_styles = {
+        "h2": {
+            "margin_bottom": "0.5em",  # Reduce space after h2
+        },
+        "h3": {
+            "margin_top": "0.5em",  # Reduce space before h3
+            "margin_bottom": "0.5em",  # Reduce space after h3
+        },
+        "ol": {
+            "margin_top": "0.5em",  # Control list spacing
+        },
+    }
+
     return rx.vstack(
-        rx.hstack(
-            rx.text("Survey Name", weight="bold"),  # Bold label
-            rx.input(
-                placeholder="Survey Name",
-                value=FormEditorState.temp_name,
-                on_change=FormEditorState.set_temp_name,  # Update temp_name on change
-                flex="1",  # Make the input grow to fill available space
-            ),
-            rx.tooltip(
+        rx.cond(
+            FormEditorState.form_id != "",
+            rx.hstack(
+                rx.text("Survey Name", weight="bold"),  # Bold label
+                rx.input(
+                    placeholder="Survey Name (e.g., 'My Survey')",
+                    value=FormEditorState.temp_name,
+                    on_change=FormEditorState.set_temp_name,  # Update temp_name on change
+                    flex="1",  # Make the input grow to fill available space
+                ),
                 rx.button(
                     "Rename",
                     on_click=FormEditorState.set_name(
-                        FormEditorState.temp_name
+                            FormEditorState.temp_name
                     ),  # Update name on click
                     color_scheme="blue",
                 ),
-                content="Update the name of the survey.",
+                align="center",
+                spacing="2",
+                width="100%",
             ),
-            align="center",
-            spacing="2",
-            width="100%",
+            rx.hstack(
+                rx.text("", weight="bold"),  # Default text for new survey
+            ),
         ),
         # Action Buttons Section (Second Line)
         rx.cond(
@@ -442,6 +458,17 @@ def form_editor():
                 align="center",
                 justify="start",
                 width="100%",
+            ),
+            rx.markdown(
+                '''
+                ### Create a new survey
+                - Enter the name of the survey in the input field below "Create Survey" on the menu.
+                - Click the "New Survey" button to create a new survey.
+
+                ### Edit an existing survey
+                - Select your created surveys on the menu.
+                ''',
+                custom_styles=markdown_styles,
             ),
         ),
         rx.divider(),

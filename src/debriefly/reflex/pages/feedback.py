@@ -44,6 +44,7 @@ def feedback_page() -> rx.Component:
                             "(Kentaro Nakamura)",
                             href="https://k-nakam.github.io/",
                             color="blue.500",
+                            is_external=True,
                         ),
                     ),
                     # Add custom styling to make the marker (number) bold
@@ -56,20 +57,26 @@ def feedback_page() -> rx.Component:
             # Simplified buttons in horizontal layout
             rx.hstack(
                 rx.link(
-                    rx.button(
-                        "GitHub Issues",
-                        color_scheme="purple",
-                        size="md",
+                    rx.tooltip(
+                        rx.button(
+                            "GitHub Issues",
+                            color_scheme="purple",
+                            size="md",
+                        ),
+                        content="Open GitHub Issue Page",
                     ),
                     href="https://github.com/iqss-research/debriefly/issues",
                     is_external=True,
                     text_decoration="none",
                 ),
                 rx.link(
-                    rx.button(
+                    rx.tooltip(
+                        rx.button(
                         "Email Feedback",
                         color_scheme="green",
                         size="md",
+                        ),
+                        content="Email to the Maintainer",
                     ),
                     href="mailto:knakamura@g.harvard.edu?subject=Debriefly%20Feedback",
                     text_decoration="none",
