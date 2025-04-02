@@ -145,53 +145,6 @@ def chat_ui() -> rx.Component:
             rx.vstack(
                 chat(),
                 action_bar(),
-                rx.script(
-                    """
-                    if (!window.timerInterval) {
-                        function checkAndActivateFinish() {
-                            const chatElement = document.getElementById('chat_ui');
-                            if (!chatElement) {
-                                clearInterval(window.timerInterval);
-                                window.timerInterval = null;
-                                return;
-                            }
-                            try {
-                                window.reflex.call("ChatState.check_min_time_reached").then(() => {
-                                    window.reflex.updateState();
-                                });
-                            } catch (e) {
-                                console.error("Error checking time:", e);
-                            }
-                        }
-
-                        checkAndActivateFinish();
-
-                        window.timerInterval = setInterval(checkAndActivateFinish, 1000);
-
-                        window.addEventListener('beforeunload', function() {
-                            if (window.timerInterval) {
-                                clearInterval(window.timerInterval);
-                                window.timerInterval = null;
-                            }
-                        });
-                    }
-                """
-                ),
-                # Disabling the timer (it is for debugging purposes)
-                # rx.cond(
-                #    ChatState.show_timer,
-                #    rx.cond(
-                #        ~ChatState.show_finish,
-                #        rx.text(
-                #            f"Time remaining: {ChatState.time_remaining // 60} min {ChatState.time_remaining % 60} sec",
-                #            color="gray.600",
-                #            font_size="sm",
-                #            text_align="center",
-                #            width="100%",
-                #            margin_top="8px",
-                #        ),
-                #    ),
-                # ),
                 id="chat_ui",  # Add this line
                 height="100%",
             ),

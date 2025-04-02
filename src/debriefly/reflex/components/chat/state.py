@@ -23,6 +23,8 @@ from debriefly.reflex.form_designer.pages.form_entry import (
 )
 from debriefly.reflex.form_designer import routes
 
+import asyncio
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,38 +48,17 @@ class ChatState(MainState):
     field: Field = Field(min_debriefing_time=0)  # Default value to avoid None
     show_finish: bool = False  # New state variable to control visibility
 
-    def set_show_finish(self):
-        """Set show_finish to True."""
-        self.show_finish = True
-        logger.info("Set show_finish to True")
-
-    def check_min_time_reached(self):
-        """Check if the minimum debriefing time has been reached."""
-        logger.info("check_min_time_reached called")
-        min_time = 0
-        if (
-            hasattr(self.field, "min_debriefing_time")
-            and self.field.min_debriefing_time is not None
-        ):
-            min_time = self.field.min_debriefing_time
-
-        if min_time <= 0:
-            logger.info("No minimum time required, showing finish button")
-            self.show_finish = True
-            return True
-
-        if not self.chat_start_time:
-            logger.info("No chat start time, not showing finish button yet")
-            return False
-
-        elapsed = time.time() - self.chat_start_time
-        logger.info(f"Elapsed time: {elapsed}, min time: {min_time}")
-
-        if elapsed >= min_time:
-            logger.info("Minimum time reached, showing finish button")
-            self.show_finish = True
-            return True
-        return False
+    @rx.background
+    async def count_time(self):
+        if self.chat_start_time is None:
+            return
+        while not self.done:
+            elapsed = time.time() - self.chat_start_time
+            async with self:
+                if elapsed > self.field.min_debriefing_time:
+                    self.show_finish = True
+            logger.info("Elapsed time: %s seconds", elapsed)
+            await asyncio.sleep(1)
 
     async def on_load(self):
         logger.info("ChatState on_load")
@@ -159,11 +140,9 @@ class ChatState(MainState):
                 f"chat_start_time: {self.chat_start_time}, min_debriefing_time: {self.field.min_debriefing_time}"
             )
             if (
-                self.field.min_debriefing_time is None
-                or self.field.min_debriefing_time == 0
+                self.field.min_debriefing_time == 0
             ):
                 self.show_finish = True
-                logger.info("No minimum time, show_finish set to True")
             self.loaded = True
             logger.info(f"ChatState loaded: self.loaded = {self.loaded}")
 
@@ -188,12 +167,8 @@ class ChatState(MainState):
             )
             self.chat = [QA(question="", answer=self.initial_message)]
 
-            # Check immediately if no minimum time
-            if (
-                self.field.min_debriefing_time is None
-                or self.field.min_debriefing_time == 0
-            ):
-                self.show_finish = True
+            if not self.show_finish and self.field.min_debriefing_time > 0:
+                return ChatState.count_time()
 
     async def process_question(self, form_data: dict[str, str]):
         question = form_data.get("question")
@@ -372,45 +347,3 @@ class ChatState(MainState):
                             session.commit()
                 logger.info("Redirecting to done screen")
                 yield rx.redirect(routes.FORM_ENTRY_SUCCESS)
-
-    @rx.var
-    def can_finish_chat(self) -> bool:
-        min_time = 0
-        if (
-            hasattr(self.field, "min_debriefing_time")
-            and self.field.min_debriefing_time is not None
-        ):
-            min_time = self.field.min_debriefing_time
-
-        if min_time <= 0:
-            return True
-        if not self.chat_start_time:
-            return False
-        elapsed = time.time() - self.chat_start_time
-        return elapsed >= min_time
-
-    @rx.var
-    def show_timer(self) -> bool:
-        """Check if the timer should be displayed."""
-        min_time = 0
-        if (
-            hasattr(self.field, "min_debriefing_time")
-            and self.field.min_debriefing_time is not None
-        ):
-            min_time = self.field.min_debriefing_time
-        return min_time > 0
-
-    @rx.var
-    def time_remaining(self) -> int:
-        """Calculate remaining time in seconds."""
-        min_time = 0
-        if (
-            hasattr(self.field, "min_debriefing_time")
-            and self.field.min_debriefing_time is not None
-        ):
-            min_time = self.field.min_debriefing_time
-
-        if min_time <= 0 or not self.chat_start_time:
-            return 0
-        elapsed = time.time() - self.chat_start_time
-        return max(0, int(min_time - elapsed))
