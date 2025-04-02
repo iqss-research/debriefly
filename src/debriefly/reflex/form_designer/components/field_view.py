@@ -110,7 +110,7 @@ def field_prompt(field: Field, markdown: str = "", show_name: bool = False):
             FieldType.static.value,
             rx.markdown(rx.cond(markdown == "", field.prompt, markdown)),
         ),
-        (FieldType.pagebreak.value, rx.text("------ break ------")),
+        (FieldType.pagebreak.value, rx.text("------ Page Break ------")),
         rx.cond(
             field.prompt != "",
             rx.text(f"{field.prompt}{name}"),
