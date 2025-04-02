@@ -147,7 +147,8 @@ class FieldEditorState(AppState):
 
     def open_new_static_field(self):
         """Create a new static field and open the editor modal."""
-        self.field = Field(form_id=self.form_id, type_=FieldType.static)
+        self.field = Field(form_id=self.form_id)
+        self.field.type_ = FieldType.static  # Ensure the type is set to static
         self.field_editor_open = True
 
     def handle_required_change(self, is_checked: bool):

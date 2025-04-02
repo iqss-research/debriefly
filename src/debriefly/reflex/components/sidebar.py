@@ -2,20 +2,13 @@ import reflex as rx
 import reflex_clerk as clerk
 from debriefly import __version__
 from debriefly.reflex import styles
-from debriefly.reflex.form_designer.components.form_select import FormSelectState
+from debriefly.reflex.form_designer.components.form_select import FormSelectState, form_select
 from debriefly.reflex.form_designer import routes
 
 # from debriefly.reflex.form_designer.components.form_editor import FormEditorState
 import uuid
 from debriefly.reflex.backend.models import Form
 from debriefly.reflex.backend.backend import MainState
-
-pages = [
-    ("Home", "/", "home", ""),
-    ("Surveys", "/edit/form", "shield-question", ""),
-    ("Feedback", "/feedback", "message_square", "", False),
-    ("Config", "/config", "cog", "org:app:admin"),
-]
 
 
 def info_footer() -> rx.Component:
@@ -28,10 +21,12 @@ def info_footer() -> rx.Component:
             clerk.signed_in(
                 rx.box(
                     clerk.user_button(),
-                    clerk.protect(
-                        clerk.organization_switcher(),
-                        permission="org:app:admin",
-                    ),
+                    clerk.organization_switcher(),
+                    # Following did not work as expected. Need to make a change.
+                    #clerk.protect(
+                    #    clerk.organization_switcher(),
+                    #    permission="org:app:admin",
+                    #),
                 )
             ),
         ),
@@ -136,19 +131,20 @@ def sidebar() -> rx.Component:
                     spacing="2",
                     padding_left="0.5em",  # Align with sidebar items
                 ),
-                rx.foreach(
-                    FormSelectState.forms,
-                    lambda form: rx.hstack(
-                        rx.link(
-                            rx.text(form.name),
-                            href=routes.edit_form(form.id),
-                            color=rx.cond(
-                                rx.State.form_id == form.id.to_string(),
-                                styles.accent_text_color,
-                                styles.text_color,
-                            ),
-                            width="100%",
-                        ),
+                form_select(),
+                #rx.foreach(
+                #    FormSelectState.forms,
+                #    lambda form: rx.hstack(
+                #        rx.link(
+                #            rx.text(form.name),
+                #            href=routes.edit_form(form.id),
+                #            color=rx.cond(
+                #                rx.State.form_id == form.id.to_string(),
+                #                styles.accent_text_color,
+                #                styles.text_color,
+                #            ),
+                #            width="100%",
+                #        ),
                         # Delete button on the sidebar. Disabled for now.
                         # rx.alert_dialog.root(
                         #    rx.alert_dialog.trigger(
@@ -180,16 +176,20 @@ def sidebar() -> rx.Component:
                         #        ),
                         #    ),
                         # ),
-                        align="center",
-                        justify="between",
-                        width="100%",
-                        padding_left="0.5em",  # Align with other items
-                    ),
-                ),
+                #        align="center",
+                #        justify="between",
+                #        width="100%",
+                #        padding_left="0.5em",  # Align with other items
+                #    ),
+                #),
                 spacing="1",
                 width="100%",  # Ensure full width
             ),
             sidebar_item("Feedback", "/feedback", "message_square"),
+            clerk.protect(
+                sidebar_item("Config", "/config", "cog"),
+                permission="org:app:admin",
+            ),
             rx.spacer(),
             rx.divider(),
             info_footer(),

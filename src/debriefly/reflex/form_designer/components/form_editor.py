@@ -98,7 +98,7 @@ class FormEditorState(AppState):
             return FormEditorState.load_form_by_id(self.form.id)
 
     def add_special_field(self, field_type: str):
-        """Add a special field (page break or static text) directly without using the editor."""
+        """Add a special field (page break) directly without using the editor."""
         if not self._user_has_access():
             return
 
@@ -110,7 +110,7 @@ class FormEditorState(AppState):
 
             # Create the new field with default values
             new_field = Field(
-                name=f"{'Page Break' if field_type == FieldType.pagebreak.value else 'Static Text'} {len(self.form.fields) + 1}",
+                name=f"{'Page Break'} {len(self.form.fields) + 1}",
                 type_=FieldType(field_type),
                 prompt="",
                 form_id=self.form.id,
