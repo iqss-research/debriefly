@@ -140,9 +140,7 @@ class ChatState(MainState):
             logger.info(
                 f"chat_start_time: {self.chat_start_time}, min_debriefing_time: {self.field.min_debriefing_time}"
             )
-            if (
-                self.field.min_debriefing_time == 0
-            ):
+            if self.field.min_debriefing_time == 0:
                 self.show_finish = True
             self.loaded = True
             logger.info(f"ChatState loaded: self.loaded = {self.loaded}")

@@ -72,9 +72,9 @@ def feedback_page() -> rx.Component:
                 rx.link(
                     rx.tooltip(
                         rx.button(
-                        "Email Feedback",
-                        color_scheme="green",
-                        size="md",
+                            "Email Feedback",
+                            color_scheme="green",
+                            size="md",
                         ),
                         content="Email to the Maintainer",
                     ),

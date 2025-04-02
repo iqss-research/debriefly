@@ -23,7 +23,7 @@ tooltips = {
     "required": "If checked, the survey participants must answer this question to proceed.",
     "debriefing": "If checked, this question will be used for automated cognitive debriefing purposes.",
     "answer_options": "The list of options for the survey participants to choose from (for radio or checkbox formats).",
-    "minimum_time": "The minimum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the participants can finish the conversation."
+    "minimum_time": "The minimum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the participants can finish the conversation.",
 }
 
 

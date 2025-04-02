@@ -377,7 +377,7 @@ def form_editor():
                 rx.button(
                     "Rename",
                     on_click=FormEditorState.set_name(
-                            FormEditorState.temp_name
+                        FormEditorState.temp_name
                     ),  # Update name on click
                     color_scheme="blue",
                 ),
@@ -460,14 +460,14 @@ def form_editor():
                 width="100%",
             ),
             rx.markdown(
-                '''
+                """
                 ### Create a new survey
                 - Enter the name of the survey in the input field below "Create Survey" on the menu.
                 - Click the "New Survey" button to create a new survey.
 
                 ### Edit an existing survey
                 - Select your created surveys on the menu.
-                ''',
+                """,
                 custom_styles=markdown_styles,
             ),
         ),

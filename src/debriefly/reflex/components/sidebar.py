@@ -2,13 +2,17 @@ import reflex as rx
 import reflex_clerk as clerk
 from debriefly import __version__
 from debriefly.reflex import styles
-from debriefly.reflex.form_designer.components.form_select import FormSelectState, form_select
+from debriefly.reflex.form_designer.components.form_select import (
+    FormSelectState,
+    form_select,
+)
 from debriefly.reflex.form_designer import routes
 
 # from debriefly.reflex.form_designer.components.form_editor import FormEditorState
 import uuid
 from debriefly.reflex.backend.models import Form
 from debriefly.reflex.backend.backend import MainState
+
 
 def info_footer() -> rx.Component:
     return rx.vstack(
@@ -45,8 +49,10 @@ def info_footer() -> rx.Component:
         width="100%",
     )
 
+
 def sidebar_item_icon(icon: str) -> rx.Component:
     return rx.icon(icon, size=18)
+
 
 def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
     active = rx.State.router.page.path == url.lower()
@@ -90,6 +96,7 @@ def sidebar_item(text: str, url: str, icon: str) -> rx.Component:
         width="100%",
     )
 
+
 def sidebar() -> rx.Component:
     return rx.flex(
         rx.vstack(
@@ -99,11 +106,11 @@ def sidebar() -> rx.Component:
             rx.vstack(
                 rx.tooltip(
                     rx.hstack(
-                    rx.icon("pen", size=18),
-                    rx.text("Create Survey", weight="bold"),
-                    align="center",
-                    spacing="2",
-                    padding_left="0.5em",  # Align with sidebar items
+                        rx.icon("pen", size=18),
+                        rx.text("Create Survey", weight="bold"),
+                        align="center",
+                        spacing="2",
+                        padding_left="0.5em",  # Align with sidebar items
                     ),
                     content="Enter New Survey Name and click 'New Survey' to create a new survey",
                 ),
@@ -135,7 +142,7 @@ def sidebar() -> rx.Component:
                     content="Select your created surveys from below",
                 ),
                 form_select(),
-                #rx.foreach(
+                # rx.foreach(
                 #    FormSelectState.forms,
                 #    lambda form: rx.hstack(
                 #        rx.link(
@@ -148,43 +155,43 @@ def sidebar() -> rx.Component:
                 #            ),
                 #            width="100%",
                 #        ),
-                        # Delete button on the sidebar. Disabled for now.
-                        # rx.alert_dialog.root(
-                        #    rx.alert_dialog.trigger(
-                        #        rx.button(
-                        #            rx.icon(
-                        #                tag = "delete",
-                        #                color = "red.500",
-                        #                cursor = "pointer",
-                        #                size=16,
-                        #                _hover={"color": "red.700"},
-                        #            ),
-                        #            color_scheme="tomato",
-                        #            on_click=SidebarState.delete_survey(form.id),
-                        #            variant="ghost",
-                        #            size="sm",
-                        #        ),
-                        #    ),
-                        #    rx.alert_dialog.content(
-                        #        rx.alert_dialog.title("Delete Survey"),
-                        #        rx.alert_dialog.description(
-                        #            "Are you sure you want to delete this survey?"
-                        #        ),
-                        #        rx.flex(
-                        #            rx.alert_dialog.cancel(rx.button("Cancel")),
-                        #            rx.spacer(),
-                        #            rx.alert_dialog.action(
-                        #                rx.button("Delete", on_click=FormEditorState.delete_form)
-                        #            ),
-                        #        ),
-                        #    ),
-                        # ),
+                # Delete button on the sidebar. Disabled for now.
+                # rx.alert_dialog.root(
+                #    rx.alert_dialog.trigger(
+                #        rx.button(
+                #            rx.icon(
+                #                tag = "delete",
+                #                color = "red.500",
+                #                cursor = "pointer",
+                #                size=16,
+                #                _hover={"color": "red.700"},
+                #            ),
+                #            color_scheme="tomato",
+                #            on_click=SidebarState.delete_survey(form.id),
+                #            variant="ghost",
+                #            size="sm",
+                #        ),
+                #    ),
+                #    rx.alert_dialog.content(
+                #        rx.alert_dialog.title("Delete Survey"),
+                #        rx.alert_dialog.description(
+                #            "Are you sure you want to delete this survey?"
+                #        ),
+                #        rx.flex(
+                #            rx.alert_dialog.cancel(rx.button("Cancel")),
+                #            rx.spacer(),
+                #            rx.alert_dialog.action(
+                #                rx.button("Delete", on_click=FormEditorState.delete_form)
+                #            ),
+                #        ),
+                #    ),
+                # ),
                 #        align="center",
                 #        justify="between",
                 #        width="100%",
                 #        padding_left="0.5em",  # Align with other items
                 #    ),
-                #),
+                # ),
                 spacing="1",
                 width="100%",  # Ensure full width
             ),
@@ -212,6 +219,7 @@ def sidebar() -> rx.Component:
         flex="0 0 auto",
         bg=rx.color("gray", 2),  # Matches your screenshot
     )
+
 
 class SidebarState(MainState):
     new_survey_name: str = ""
