@@ -38,7 +38,7 @@ THIS_DIR = Path(__file__).parent
 
 
 def test_alembic_init_upgrade_downgrade(tmp_path):
-    if db_url := os.getenv("DB_URL") is None:
+    if (db_url := os.getenv("DB_URL")) is None:
         db_url = str(tmp_path / "test.db")
         db_url = f"sqlite:///{db_url}"
 
