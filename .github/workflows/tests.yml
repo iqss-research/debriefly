@@ -64,7 +64,10 @@ jobs:
       run: |
           pre-commit run --all-files
 
-    - name: Pytest
+    - name: Pytest with no DB_URL set
+      run: pytest
+
+    - name: Pytest with DB_URL set
       run: pytest
       env:
         DB_URL: postgres://scott:tiger@localhost:5432/debriefly
