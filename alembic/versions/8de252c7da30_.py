@@ -54,7 +54,7 @@ def upgrade() -> None:
         sa.Column(
             "indexed_ts",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=True,
         ),
         sa.ForeignKeyConstraint(
@@ -99,7 +99,7 @@ def upgrade() -> None:
         sa.Column(
             "ts",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.func.now(),
             nullable=True,
         ),
         sa.ForeignKeyConstraint(

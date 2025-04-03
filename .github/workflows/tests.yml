@@ -22,6 +22,24 @@ jobs:
         # See https://github.com/conda-incubator/setup-miniconda#IMPORTANT
         shell: bash -l {0}
 
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: scott
+          POSTGRES_PASSWORD: tiger
+          POSTGRES_DB: debriefly
+
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
+
     steps:
     - uses: actions/checkout@master
 
@@ -48,3 +66,5 @@ jobs:
 
     - name: Pytest
       run: pytest
+      env:
+        DB_URL: postgres://scott:tiger@localhost:5432/debriefly
