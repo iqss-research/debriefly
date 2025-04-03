@@ -226,6 +226,7 @@ class FormEditorState(AppState):
                     type_=field.type_,
                     required=field.required,
                     debriefing=field.debriefing,
+                    min_debriefing_time=field.min_debriefing_time,
                     prompt=field.prompt,
                     ordering=field.ordering,
                     form_id=new_form.id,

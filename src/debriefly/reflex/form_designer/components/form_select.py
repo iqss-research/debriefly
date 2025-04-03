@@ -8,10 +8,12 @@ class FormSelectState(AppState):
     forms: list[Form] = []
 
     def load_forms(self):
+        if not self.user_id:  # Wait for user_id to be available
+            return
         with rx.session() as session:
             query = Form.select()
             query = query.where(Form.user_id == self.user_id)
-            self.forms = session.exec(query).all()
+            self.forms = list(session.exec(query).all())
 
     def on_select_change(self, value: str):
         if value == "":

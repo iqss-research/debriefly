@@ -6,11 +6,12 @@ from pathlib import Path
 
 # from debriefly.reflex.views.analyze import main as analyze_main
 from debriefly.reflex.backend.backend import MainState
+from debriefly.reflex.form_designer.components.form_select import FormSelectState
 
 load_dotenv()
 
 
-@rx.page(route="/", title="Debriefly", on_load=[MainState.init])
+@rx.page(route="/", title="Debriefly", on_load=[MainState.init, FormSelectState.load_forms])
 @template
 def index() -> rx.Component:
     index_content = (
