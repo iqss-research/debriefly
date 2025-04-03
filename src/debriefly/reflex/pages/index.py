@@ -11,7 +11,9 @@ from debriefly.reflex.form_designer.components.form_select import FormSelectStat
 load_dotenv()
 
 
-@rx.page(route="/", title="Debriefly", on_load=[MainState.init, FormSelectState.load_forms])
+@rx.page(
+    route="/", title="Debriefly", on_load=[MainState.init, FormSelectState.load_forms]
+)
 @template
 def index() -> rx.Component:
     index_content = (
