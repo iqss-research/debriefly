@@ -31,7 +31,9 @@ tooltips = {
 class FieldEditorState(AppState):
     """Handle editing of a single field."""
 
-    field: Field = Field(min_debriefing_time=1800, max_debriefing_time=3600) # Default to 30 minutes for min and 60 for max
+    field: Field = Field(
+        min_debriefing_time=1800, max_debriefing_time=3600
+    )  # Default to 30 minutes for min and 60 for max
     form_owner_id: int = -1
     field_editor_open: bool = False
 
@@ -66,7 +68,9 @@ class FieldEditorState(AppState):
     def increment_max_time(self):
         """Increase the maximum debriefing time by 1 minute."""
         current_time = self.field.max_debriefing_time or 0
-        self.field_max_debriefing_time = (current_time * 2) + 60  # Increase by 1 minute (60 seconds)
+        self.field_max_debriefing_time = (
+            current_time * 2
+        ) + 60  # Increase by 1 minute (60 seconds)
 
     def decrement_max_time(self):
         """Decrease the minimum debriefing time by 1 minute, not below 0."""
@@ -109,7 +113,9 @@ class FieldEditorState(AppState):
         if not self._user_has_access():
             return
         if self.field_id == "new":
-            self.field = Field(form_id=self.form_id, min_debriefing_time=1800, max_debriefing_time=3600)  # Default to 30 minutes for min and 60 for max
+            self.field = Field(
+                form_id=self.form_id, min_debriefing_time=1800, max_debriefing_time=3600
+            )  # Default to 30 minutes for min and 60 for max
         else:
             with rx.session() as session:
                 self.field = session.get(Field, self.field_id)
@@ -320,13 +326,13 @@ def field_editor():
                                 width="100%",
                             ),
                         ),
-                            rx.text_area(
-                                placeholder="Question Text",
-                                name="field_prompt",
-                                value=FieldEditorState.field.prompt,
-                                on_change=lambda v: FieldEditorState.set_field("prompt", v),
-                                width="100%",
-                            ),
+                        rx.text_area(
+                            placeholder="Question Text",
+                            name="field_prompt",
+                            value=FieldEditorState.field.prompt,
+                            on_change=lambda v: FieldEditorState.set_field("prompt", v),
+                            width="100%",
+                        ),
                     ),
                     width="100%",
                 ),

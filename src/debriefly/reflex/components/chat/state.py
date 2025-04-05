@@ -45,7 +45,9 @@ class ChatState(MainState):
     done: bool = False  # done with current chat?
     system_message: str
     initial_message: str
-    field: Field = Field(min_debriefing_time=0, max_debriefing_time=0)  # Default value to avoid None
+    field: Field = Field(
+        min_debriefing_time=0, max_debriefing_time=0
+    )  # Default value to avoid None
     show_finish: bool = False  # New state variable to control visibility
     show_force_finish: bool = False  # Allow forced finish if max time exceeded
     is_preview: bool = FormEntryState.is_preview  # Inherit from FormEntryState
@@ -59,7 +61,10 @@ class ChatState(MainState):
             async with self:
                 if elapsed > self.field.min_debriefing_time:
                     self.show_finish = True
-                if elapsed >= self.field.max_debriefing_time and self.field.max_debriefing_time > 0:
+                if (
+                    elapsed >= self.field.max_debriefing_time
+                    and self.field.max_debriefing_time > 0
+                ):
                     logger.info("Max debriefing time exceeded, forcing finish")
                     self.show_finish = False  # Don't show finish if max time exceeded
                     self.show_force_finish = True
@@ -175,7 +180,11 @@ class ChatState(MainState):
             )
             self.chat = [QA(question="", answer=self.initial_message)]
 
-            if not self.show_force_finish and self.field.min_debriefing_time > 0 and self.field.max_debriefing_time > 0:
+            if (
+                not self.show_force_finish
+                and self.field.min_debriefing_time > 0
+                and self.field.max_debriefing_time > 0
+            ):
                 return ChatState.count_time()
 
     async def process_question(self, form_data: dict[str, str]):

@@ -112,12 +112,12 @@ def action_bar() -> rx.Component:
                         rx.cond(
                             ~ChatState.show_force_finish,
                             rx.button(
-                            rx.cond(
-                                ChatState.processing,
-                                loading_icon(height="1em"),
-                                rx.text("Send"),
-                            ),
-                            type="submit",
+                                rx.cond(
+                                    ChatState.processing,
+                                    loading_icon(height="1em"),
+                                    rx.text("Send"),
+                                ),
+                                type="submit",
                             ),
                         ),
                         # Conditionally show the Finish Chat button based on show_finish
@@ -125,7 +125,7 @@ def action_bar() -> rx.Component:
                             ChatState.show_finish | ChatState.show_force_finish,
                             rx.button(
                                 "End Chat",
-                                color_scheme = "tomato",
+                                color_scheme="tomato",
                                 id="finish_chat_button",
                                 on_click=ChatState.finish_chat,
                             ),
