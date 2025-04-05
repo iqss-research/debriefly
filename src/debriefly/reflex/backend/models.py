@@ -51,6 +51,7 @@ class Field(rx.Model, table=True):
     required: bool = False
     debriefing: bool = False
     min_debriefing_time: Optional[int] = None
+    max_debriefing_time: Optional[int] = None
     prompt: str = ""
     ordering: float = 0.0
     custom_system_message: Optional[str] = None
