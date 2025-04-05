@@ -22,7 +22,6 @@ class Config(rx.Model, table=True):
 
 class User(rx.Model, table=True):
     user_id: str = Field(primary_key=True)
-    qualtrics_api_token: Optional[str] = None
 
 
 class FieldType(PyEnum):
