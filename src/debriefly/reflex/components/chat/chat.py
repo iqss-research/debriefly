@@ -64,7 +64,23 @@ def action_bar() -> rx.Component:
                 ChatState.show_finish,
                 rx.box(
                     rx.text(
-                        "Now, you can finish your conversation. You are of course more than welcome to keep the conversation.",
+                        "Please click 'End Chat' when you have finished, but feel free to continue chatting if you like.",
+                        color="green",
+                    ),
+                    id="finish_message",
+                    padding="0.5em",
+                    background_color="lightgreen",
+                    border_radius="4px",
+                    margin_bottom="8px",
+                    width="100%",
+                ),
+                rx.fragment(),  # Empty when hidden
+            ),
+            rx.cond(
+                ChatState.show_force_finish,
+                rx.box(
+                    rx.text(
+                        "You reached the maximum time. Please end the chat by clicking 'End Chat' below.",
                         color="green",
                     ),
                     id="finish_message",
@@ -93,19 +109,23 @@ def action_bar() -> rx.Component:
                             ),
                             on_paste=rx.prevent_default,
                         ),
-                        rx.button(
+                        rx.cond(
+                            ~ChatState.show_force_finish,
+                            rx.button(
                             rx.cond(
                                 ChatState.processing,
                                 loading_icon(height="1em"),
                                 rx.text("Send"),
                             ),
                             type="submit",
+                            ),
                         ),
                         # Conditionally show the Finish Chat button based on show_finish
                         rx.cond(
-                            ChatState.show_finish,
+                            ChatState.show_finish | ChatState.show_force_finish,
                             rx.button(
-                                "Finish Chat",
+                                "End Chat",
+                                color_scheme = "tomato",
                                 id="finish_chat_button",
                                 on_click=ChatState.finish_chat,
                             ),
@@ -114,7 +134,7 @@ def action_bar() -> rx.Component:
                         rx.cond(
                             ChatState.is_preview,
                             rx.button(
-                                "Finish Chat (Preview Only)",  # For preview mode
+                                "End Chat (Preview Only)",  # For preview mode
                                 color_scheme="green",
                                 id="finish_chat_button2",
                                 on_click=ChatState.finish_chat,

@@ -24,13 +24,14 @@ tooltips = {
     "debriefing": "If checked, this question will be used for automated cognitive debriefing purposes.",
     "answer_options": "The list of options for the survey participants to choose from (for radio or checkbox formats).",
     "minimum_time": "The minimum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the participants can finish the conversation.",
+    "maximum_time": "The maximum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the conversation will be ended automatically.",
 }
 
 
 class FieldEditorState(AppState):
     """Handle editing of a single field."""
 
-    field: Field = Field(min_debriefing_time=1800)
+    field: Field = Field(min_debriefing_time=1800, max_debriefing_time=3600) # Default to 30 minutes for min and 60 for max
     form_owner_id: int = -1
     field_editor_open: bool = False
 
@@ -40,6 +41,14 @@ class FieldEditorState(AppState):
         return (
             self.field.min_debriefing_time // 60
             if self.field.min_debriefing_time is not None
+            else 1
+        )
+
+    @rx.var
+    def max_debriefing_time_in_minutes(self) -> int:
+        return (
+            self.field.max_debriefing_time // 60
+            if self.field.max_debriefing_time is not None
             else 1
         )
 
@@ -53,6 +62,17 @@ class FieldEditorState(AppState):
         current_time = self.field.min_debriefing_time or 0
         new_time = current_time - 60
         self.field.min_debriefing_time = max(0, new_time)  # Prevent negative values
+
+    def increment_max_time(self):
+        """Increase the maximum debriefing time by 1 minute."""
+        current_time = self.field.max_debriefing_time or 0
+        self.field_max_debriefing_time = (current_time * 2) + 60  # Increase by 1 minute (60 seconds)
+
+    def decrement_max_time(self):
+        """Decrease the minimum debriefing time by 1 minute, not below 0."""
+        current_time = self.field.max_debriefing_time or 0
+        new_time = current_time - 60
+        self.field.max_debriefing_time = max(0, new_time)  # Prevent negative values
 
     def _user_has_access(self):
         return self.form_owner_id == self.user_id
@@ -89,12 +109,14 @@ class FieldEditorState(AppState):
         if not self._user_has_access():
             return
         if self.field_id == "new":
-            self.field = Field(form_id=self.form_id, min_debriefing_time=1800)
+            self.field = Field(form_id=self.form_id, min_debriefing_time=1800, max_debriefing_time=3600)  # Default to 30 minutes for min and 60 for max
         else:
             with rx.session() as session:
                 self.field = session.get(Field, self.field_id)
                 if self.field.min_debriefing_time is None:
                     self.field.min_debriefing_time = 1800
+                if self.field.max_debriefing_time is None:
+                    self.field.max_debriefing_time = 3600
         self.field_editor_open = True
 
     def set_type(self, type_: str):
@@ -298,13 +320,13 @@ def field_editor():
                                 width="100%",
                             ),
                         ),
-                        rx.input(
-                            placeholder="Question Text",
-                            name="field_prompt",
-                            value=FieldEditorState.field.prompt,
-                            on_change=lambda v: FieldEditorState.set_field("prompt", v),
-                            width="100%",
-                        ),
+                            rx.text_area(
+                                placeholder="Question Text",
+                                name="field_prompt",
+                                value=FieldEditorState.field.prompt,
+                                on_change=lambda v: FieldEditorState.set_field("prompt", v),
+                                width="100%",
+                            ),
                     ),
                     width="100%",
                 ),
@@ -392,6 +414,29 @@ def field_editor():
                                     rx.button(
                                         "+",
                                         on_click=FieldEditorState.increment_min_time,
+                                        type="button",  # Prevent form submission
+                                    ),
+                                    spacing="2",
+                                ),
+                            ),
+                            rx.cond(
+                                FieldEditorState.field.debriefing,
+                                rx.hstack(
+                                    rx.tooltip(
+                                        rx.text("Maximum Time (minutes)"),
+                                        content=tooltips["maximum_time"],
+                                    ),
+                                    rx.button(
+                                        "-",
+                                        on_click=FieldEditorState.decrement_max_time,
+                                        type="button",  # Prevent form submission
+                                    ),
+                                    rx.text(
+                                        FieldEditorState.max_debriefing_time_in_minutes.to_string()
+                                    ),
+                                    rx.button(
+                                        "+",
+                                        on_click=FieldEditorState.increment_max_time,
                                         type="button",  # Prevent form submission
                                     ),
                                     spacing="2",

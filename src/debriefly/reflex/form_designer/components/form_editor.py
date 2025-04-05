@@ -85,6 +85,7 @@ class FormEditorState(AppState):
                         existing_field.prompt = field.prompt
                         existing_field.ordering = field.ordering
                         existing_field.min_debriefing_time = field.min_debriefing_time
+                        existing_field.max_debriefing_time = field.max_debriefing_time
                         session.add(existing_field)
                         session.commit()
             return FormEditorState.load_form_by_id(self.form.id)
@@ -227,6 +228,7 @@ class FormEditorState(AppState):
                     required=field.required,
                     debriefing=field.debriefing,
                     min_debriefing_time=field.min_debriefing_time,
+                    max_debriefing_time=field.max_debriefing_time,
                     prompt=field.prompt,
                     ordering=field.ordering,
                     form_id=new_form.id,
