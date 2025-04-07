@@ -1,5 +1,4 @@
 from debriefly.reflex.template import template
-from debriefly.reflex.components.user_input import user_input
 from debriefly.reflex.backend.backend import MainState
 import reflex as rx
 
@@ -20,14 +19,6 @@ def user() -> rx.Component:
             ),
             rx.form.root(
                 rx.vstack(
-                    user_input(
-                        "Qualtrics API Token",
-                        "qualtrics_api_token",
-                        "",
-                        "text",
-                        "braces",
-                        MainState.user.qualtrics_api_token,
-                    ),
                     rx.button("Update", type="submit", width="100%"),
                     width="100%",
                     spacing="5",
