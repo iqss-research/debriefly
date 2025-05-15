@@ -5,10 +5,12 @@ from debriefly.reflex.form_designer import constants, routes, utils
 from debriefly.reflex.backend.models import Field, FieldType, Option
 from debriefly.reflex.backend.backend import MainState as AppState
 from debriefly.reflex.form_designer.components.form_editor import FormEditorState
+from debriefly.openai import check_prompt_compliance, PromptVerdict
 
 # from debriefly.reflex.form_designer.components.field_view import field_input
 # import uuid
 # from debriefly.reflex.backend.models import Form
+
 
 display_names = {
     "text": "Small Text Area",
@@ -122,6 +124,25 @@ class FieldEditorState(AppState):
             # )
 
         self.error = ""  # clear the error message
+
+        # check system prompt
+        sys_prompt = form_data.get("custom_system_message", "").strip()
+        init_msg = form_data.get("custom_initial_message", "").strip()
+
+        # run compliance checks (only on non-empty edits) only if debriefing is checked
+        if self.field.debriefing:
+            for which, txt in {
+                "system prompt": sys_prompt,
+                "initial message": init_msg,
+            }.items():
+                if txt:
+                    verdict = check_prompt_compliance(
+                        txt,
+                    )
+
+                if verdict == PromptVerdict.REJECT:
+                    self.error = f"{which.title()} rejected. Your prompt must be about cognitive debriefing."
+                    return  # abort save, stay in modal
 
         if self.field.type_ == FieldType.static:
             self.field.prompt = form_data["prompt"]
