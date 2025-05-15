@@ -79,9 +79,7 @@ class FieldEditorState(AppState):
     def increment_max_time(self):
         """Increase the maximum debriefing time by 1 minute."""
         current_time = self.field.max_debriefing_time or 0
-        self.field_max_debriefing_time = (
-            current_time * 2
-        ) + 60  # Increase by 1 minute (60 seconds)
+        self.field.max_debriefing_time = current_time + 60  # Add 1 minute (60 seconds)
 
     def decrement_max_time(self):
         """Decrease the minimum debriefing time by 1 minute, not below 0."""
