@@ -181,12 +181,12 @@ class ChatState(MainState):
 
             # load custom system and initial messages if they exist
             if self.field.custom_system_message:
-                self.system_message = self.field.custom_system_message.format(**kwargs)
+                tmpl = env.from_string(self.field.custom_system_message)
+                self.system_message = tmpl.render(**kwargs)
 
             if self.field.custom_initial_message:
-                self.initial_message = self.field.custom_initial_message.format(
-                    **kwargs
-                )
+                tmpl = env.from_string(self.field.custom_initial_message)
+                self.initial_message = tmpl.render(**kwargs)
 
             self.chat = [QA(question="", answer=self.initial_message)]
 

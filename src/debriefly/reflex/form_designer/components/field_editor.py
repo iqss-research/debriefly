@@ -5,10 +5,12 @@ from debriefly.reflex.form_designer import constants, routes, utils
 from debriefly.reflex.backend.models import Field, FieldType, Option
 from debriefly.reflex.backend.backend import MainState as AppState
 from debriefly.reflex.form_designer.components.form_editor import FormEditorState
+from debriefly.openai import check_prompt_compliance, PromptVerdict
 
 # from debriefly.reflex.form_designer.components.field_view import field_input
 # import uuid
 # from debriefly.reflex.backend.models import Form
+
 
 display_names = {
     "text": "Small Text Area",
@@ -45,6 +47,8 @@ class FieldEditorState(AppState):
     default_system_message: str = ""
     default_initial_message: str = ""
 
+    error: str = ""
+
     def toggle_prompt_editor(self):
         self.show_prompt_editor = not self.show_prompt_editor
 
@@ -79,9 +83,7 @@ class FieldEditorState(AppState):
     def increment_max_time(self):
         """Increase the maximum debriefing time by 1 minute."""
         current_time = self.field.max_debriefing_time or 0
-        self.field_max_debriefing_time = (
-            current_time * 2
-        ) + 60  # Increase by 1 minute (60 seconds)
+        self.field.max_debriefing_time = current_time + 60  # Add 1 minute (60 seconds)
 
     def decrement_max_time(self):
         """Decrease the minimum debriefing time by 1 minute, not below 0."""
@@ -93,6 +95,55 @@ class FieldEditorState(AppState):
         return self.form_owner_id == self.user_id
 
     def handle_submit(self, form_data: dict[str, str]):
+        # validating missingness
+        missing: list[str] = []
+
+        # 1. question wording (prompt)
+        if not form_data.get("field_prompt", "").strip():
+            missing.append("Question Text")
+
+        # 2. identifier (name)
+        if not form_data.get("field_name", "").strip():
+            missing.append("Question Identifier")
+
+        # 3. answer options when the answer type needs them
+        needs_options = form_data.get("type_") in {
+            FieldType.radio.value,
+            FieldType.checkbox.value,
+        }
+        if needs_options and not any(opt.label.strip() for opt in self.field.options):
+            missing.append("Answer Options")
+
+        if missing:
+            # show a single, clear message and abort the save
+            self.error = f"The required field is not filled ({', '.join(missing)})."
+            return  # stay in the editor
+            # return toast.error(
+            #    f"The required field is not filled ({', '.join(missing)}).",
+            #    style={"z-index": 2000},
+            # )
+
+        self.error = ""  # clear the error message
+
+        # check system prompt
+        sys_prompt = form_data.get("custom_system_message", "").strip()
+        init_msg = form_data.get("custom_initial_message", "").strip()
+
+        # run compliance checks (only on non-empty edits) only if debriefing is checked
+        if self.field.debriefing:
+            for which, txt in {
+                "system prompt": sys_prompt,
+                "initial message": init_msg,
+            }.items():
+                if txt:
+                    verdict = check_prompt_compliance(
+                        txt,
+                    )
+
+                if verdict == PromptVerdict.REJECT:
+                    self.error = f"{which.title()} rejected. Your prompt must be about cognitive debriefing."
+                    return  # abort save, stay in modal
+
         if self.field.type_ == FieldType.static:
             self.field.prompt = form_data["prompt"]
         else:
@@ -624,6 +675,15 @@ def field_editor():
             width="100%",
         ),
         rx.hstack(
+            rx.cond(
+                FieldEditorState.error,
+                rx.text(
+                    FieldEditorState.error,
+                    color="red",
+                    font_size="sm",
+                    font_weight="bold",
+                ),
+            ),
             rx.dialog.close(rx.button("CANCEL")),
             rx.button("SAVE", type="submit"),
             justify="end",

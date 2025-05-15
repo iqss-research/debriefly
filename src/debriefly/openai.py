@@ -15,6 +15,7 @@ from azure.search.documents.indexes.models import (
     SearchField,
     SearchFieldDataType,
 )
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -247,3 +248,55 @@ def get_client(
         return None
     else:
         return client
+
+
+class PromptVerdict(str, Enum):
+    OK = "ok"  # prompt is narrowly about survey wording
+    REJECT = "reject"  # disallowed, refuse to save
+
+
+def check_prompt_compliance(
+    text: str,
+    *,
+    api_key: str | None = None,
+    api_version: str | None = None,
+    api_endpoint: str | None = None,
+    api_model: str | None = None,
+) -> PromptVerdict:
+
+    client = AzureOpenAI(
+        api_key=api_key or os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=api_version or os.getenv("AZURE_OPENAI_API_VERSION"),
+        azure_endpoint=api_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT"),
+    )
+
+    deployment = api_model or os.getenv("AZURE_OPENAI_DEPLOYMENT_MODEL")
+
+    system = (
+        "You are a policy checker for a *cognitive-debriefing* survey tool.\n"
+        "A prompt is **OK** when it sets up an interview whose primary purpose"
+        "is to understand how respondents interpret a survey question (a.k.a. cognitive debriefing). "
+        "A prompt is **REJECT** only if it clearly tries to reuse the LLM for something unrelated "
+        "to survey-question validation (e.g., writing code, political persuasion, marketing copy) "
+        "or contains disallowed content.\n"
+        "Return one word only:\n"
+        "  'ok'      – prompt focuses on improving survey wording\n"
+        "  'reject'  – clearly tries to use the LLM for something else or violates policy"
+    )
+
+    resp = client.chat.completions.create(
+        model=deployment,
+        temperature=0,
+        stream=False,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": text},
+        ],
+    )
+    verdict = resp.choices[0].message.content.strip().lower()
+    logger.debug(f"Prompt verdict: {verdict}")
+    return (
+        PromptVerdict(verdict)
+        if verdict in PromptVerdict.__members__.values()
+        else PromptVerdict.REVIEW
+    )
