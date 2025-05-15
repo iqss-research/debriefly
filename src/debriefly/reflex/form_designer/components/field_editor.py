@@ -45,6 +45,8 @@ class FieldEditorState(AppState):
     default_system_message: str = ""
     default_initial_message: str = ""
 
+    error: str = ""
+
     def toggle_prompt_editor(self):
         self.show_prompt_editor = not self.show_prompt_editor
 
@@ -91,6 +93,36 @@ class FieldEditorState(AppState):
         return self.form_owner_id == self.user_id
 
     def handle_submit(self, form_data: dict[str, str]):
+        # validating missingness
+        missing: list[str] = []
+
+        # 1. question wording (prompt)
+        if not form_data.get("field_prompt", "").strip():
+            missing.append("Question Text")
+
+        # 2. identifier (name)
+        if not form_data.get("field_name", "").strip():
+            missing.append("Question Identifier")
+
+        # 3. answer options when the answer type needs them
+        needs_options = form_data.get("type_") in {
+            FieldType.radio.value,
+            FieldType.checkbox.value,
+        }
+        if needs_options and not any(opt.label.strip() for opt in self.field.options):
+            missing.append("Answer Options")
+
+        if missing:
+            # show a single, clear message and abort the save
+            self.error = f"The required field is not filled ({', '.join(missing)})."
+            return  # stay in the editor
+            # return toast.error(
+            #    f"The required field is not filled ({', '.join(missing)}).",
+            #    style={"z-index": 2000},
+            # )
+
+        self.error = ""  # clear the error message
+
         if self.field.type_ == FieldType.static:
             self.field.prompt = form_data["prompt"]
         else:
@@ -622,6 +654,15 @@ def field_editor():
             width="100%",
         ),
         rx.hstack(
+            rx.cond(
+                FieldEditorState.error,
+                rx.text(
+                    FieldEditorState.error,
+                    color="red",
+                    font_size="sm",
+                    font_weight="bold",
+                ),
+            ),
             rx.dialog.close(rx.button("CANCEL")),
             rx.button("SAVE", type="submit"),
             justify="end",
