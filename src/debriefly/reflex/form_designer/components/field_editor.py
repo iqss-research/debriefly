@@ -41,7 +41,7 @@ class FieldEditorState(AppState):
     form_owner_id: int = -1
     field_editor_open: bool = False
 
-    show_prompt_editor: bool = False          #  NEW flag
+    show_prompt_editor: bool = False  # NEW flag
     default_system_message: str = ""
     default_initial_message: str = ""
 
@@ -102,10 +102,14 @@ class FieldEditorState(AppState):
             self.field.debriefing = bool(form_data.get("debriefing"))
 
         if "custom_system_message" in form_data:
-            self.field.custom_system_message = form_data["custom_system_message"].strip()
+            self.field.custom_system_message = form_data[
+                "custom_system_message"
+            ].strip()
 
         if "custom_initial_message" in form_data:
-            self.field.custom_initial_message = form_data["custom_initial_message"].strip()
+            self.field.custom_initial_message = form_data[
+                "custom_initial_message"
+            ].strip()
 
         self.field_editor_open = False
         return [
@@ -144,12 +148,13 @@ class FieldEditorState(AppState):
 
         # --------- load default templates on first run -------
         if not self.default_system_message:
-            tmpl_dir = (
-                Path(__file__).resolve()
-                .parents[3]
-            )
-            self.default_system_message = (tmpl_dir / "data/templates/system_message.jinja").read_text()
-            self.default_initial_message = (tmpl_dir / "data/templates/initial_message.jinja").read_text()
+            tmpl_dir = Path(__file__).resolve().parents[3]
+            self.default_system_message = (
+                tmpl_dir / "data/templates/system_message.jinja"
+            ).read_text()
+            self.default_initial_message = (
+                tmpl_dir / "data/templates/initial_message.jinja"
+            ).read_text()
 
     @rx.var
     def system_prompt_value(self) -> str:
@@ -240,6 +245,7 @@ class FieldEditorState(AppState):
     def reset_initial_prompt(self):
         """Clear the override so the default template shows again."""
         self.set_field("custom_initial_message", "")
+
 
 def field_is_enumerated_cond(
     if_enumerated: rx.Component | rx.Var,
@@ -564,7 +570,7 @@ def field_editor():
                                 "Reset",
                                 on_click=FieldEditorState.reset_system_prompt,
                                 variant="outline",
-                                size = "2",
+                                size="2",
                                 type="button",
                             ),
                             rx.tooltip(
@@ -576,7 +582,9 @@ def field_editor():
                             name="custom_system_message",
                             placeholder="Fill the system prompt that governs the LLM behavior",
                             value=FieldEditorState.system_prompt_value,
-                            on_change=lambda v: FieldEditorState.set_field("custom_system_message", v),
+                            on_change=lambda v: FieldEditorState.set_field(
+                                "custom_system_message", v
+                            ),
                             rows="6",
                             width="100%",
                         ),
@@ -586,7 +594,7 @@ def field_editor():
                                 "Reset",
                                 on_click=FieldEditorState.reset_initial_prompt,
                                 variant="outline",
-                                size = "2",
+                                size="2",
                                 type="button",
                             ),
                             rx.tooltip(
@@ -598,13 +606,15 @@ def field_editor():
                             name="custom_initial_message",
                             placeholder="Fill the initial message that the assistant will send to the user at first",
                             value=FieldEditorState.initial_prompt_value,
-                            on_change=lambda v: FieldEditorState.set_field("custom_initial_message", v),
+                            on_change=lambda v: FieldEditorState.set_field(
+                                "custom_initial_message", v
+                            ),
                             rows="4",
                             width="100%",
                         ),
                         spacing="2",
                     ),
-                    bg=rx.color("gray",2),
+                    bg=rx.color("gray", 2),
                     p="3",
                     border_radius="md",
                     width="33%",
@@ -638,10 +648,10 @@ def field_editor_modal():
                 ),
             ),
             style={
-                "width": "90vw",       # responsive
-                "maxWidth": "72rem",   # ≈ 6xl   raise or lower as you like
+                "width": "90vw",  # responsive
+                "maxWidth": "72rem",  # ≈ 6xl   raise or lower as you like
             },
-            p = "4",
+            p="4",
         ),
         open=FieldEditorState.field_editor_open,
         on_open_change=FieldEditorState.handle_modal_open_change,
@@ -711,27 +721,29 @@ def static_field_editor():
         on_submit=FieldEditorState.handle_submit,
     )
 
+
 class PromptEditorState(rx.State):
-    system_prompt: str = ""           # what you store in DB
+    system_prompt: str = ""  # what you store in DB
     initial_message: str = ""
-    editor_open: bool = False         # modal visibility
+    editor_open: bool = False  # modal visibility
 
     # -------- event handlers --------
     def open_editor(self):
         """Open the edit modal."""
-        self.editor_open = True       # returning None is fine here
+        self.editor_open = True  # returning None is fine here
 
     def close_editor(self):
         self.editor_open = False
 
     def save(self, form_data: dict[str, str]):
         """Persist both text areas and close the modal."""
-        self.system_prompt  = form_data["system_prompt"]
+        self.system_prompt = form_data["system_prompt"]
         self.initial_message = form_data["initial_message"]
-        self.editor_open    = False
-        with rx.session() as session:      # SQL save
-            session.add(self)              # or your own table/model
+        self.editor_open = False
+        with rx.session() as session:  # SQL save
+            session.add(self)  # or your own table/model
             session.commit()
+
 
 def prompt_editor_modal() -> rx.Component:
     return rx.dialog.root(
@@ -762,5 +774,5 @@ def prompt_editor_modal() -> rx.Component:
             ),
         ),
         open=PromptEditorState.editor_open,
-        on_open_change=PromptEditorState.set_editor_open,   # built-in setter
+        on_open_change=PromptEditorState.set_editor_open,  # built-in setter
     )

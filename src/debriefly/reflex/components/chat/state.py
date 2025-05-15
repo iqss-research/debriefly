@@ -179,12 +179,14 @@ class ChatState(MainState):
                 **kwargs
             )
 
-            #load custom system and initial messages if they exist
+            # load custom system and initial messages if they exist
             if self.field.custom_system_message:
                 self.system_message = self.field.custom_system_message.format(**kwargs)
 
             if self.field.custom_initial_message:
-                self.initial_message = self.field.custom_initial_message.format(**kwargs)
+                self.initial_message = self.field.custom_initial_message.format(
+                    **kwargs
+                )
 
             self.chat = [QA(question="", answer=self.initial_message)]
 
