@@ -83,6 +83,12 @@ class FormEditorState(AppState):
                         existing_field.required = field.required
                         existing_field.debriefing = field.debriefing
                         existing_field.prompt = field.prompt
+                        existing_field.custom_system_message = (
+                            field.custom_system_message
+                        )
+                        existing_field.custom_initial_message = (
+                            field.custom_initial_message
+                        )
                         existing_field.ordering = field.ordering
                         existing_field.min_debriefing_time = field.min_debriefing_time
                         existing_field.max_debriefing_time = field.max_debriefing_time

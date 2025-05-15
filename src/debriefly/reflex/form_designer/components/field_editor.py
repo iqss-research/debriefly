@@ -1,5 +1,6 @@
 """Edit Question modal."""
 import reflex as rx
+from pathlib import Path
 from debriefly.reflex.form_designer import constants, routes, utils
 from debriefly.reflex.backend.models import Field, FieldType, Option
 from debriefly.reflex.backend.backend import MainState as AppState
@@ -25,6 +26,9 @@ tooltips = {
     "answer_options": "The list of options for the survey participants to choose from (for radio or checkbox formats).",
     "minimum_time": "The minimum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the participants can finish the conversation.",
     "maximum_time": "The maximum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the conversation will be ended automatically.",
+    "system_prompt": "Edit the system prompt that governs the LLM behavior (Caution: you must check if your prompt works well in your context).",
+    "system_prompt_edit": "Edit the system prompt that governs the LLM behavior. You must include the instruction about {{end_of_survey_token}}, which is the token that indicates the end of the survey. You are NOT allowed to create system prompts that are not for the cognitive debriefing.",
+    "initial_message_edit": "Edit the initial message that the assistant will send to the user at first. You must include the token {{question}}, which is the token that will be replaced by the question text.",
 }
 
 
@@ -36,6 +40,13 @@ class FieldEditorState(AppState):
     )  # Default to 30 minutes for min and 60 for max
     form_owner_id: int = -1
     field_editor_open: bool = False
+
+    show_prompt_editor: bool = False  # NEW flag
+    default_system_message: str = ""
+    default_initial_message: str = ""
+
+    def toggle_prompt_editor(self):
+        self.show_prompt_editor = not self.show_prompt_editor
 
     @rx.var
     def min_debriefing_time_in_minutes(self) -> int:
@@ -90,6 +101,16 @@ class FieldEditorState(AppState):
             self.field.required = bool(form_data.get("required"))
             self.field.debriefing = bool(form_data.get("debriefing"))
 
+        if "custom_system_message" in form_data:
+            self.field.custom_system_message = form_data[
+                "custom_system_message"
+            ].strip()
+
+        if "custom_initial_message" in form_data:
+            self.field.custom_initial_message = form_data[
+                "custom_initial_message"
+            ].strip()
+
         self.field_editor_open = False
         return [
             FormEditorState.update_field(self.field),
@@ -124,6 +145,32 @@ class FieldEditorState(AppState):
                 if self.field.max_debriefing_time is None:
                     self.field.max_debriefing_time = 3600
         self.field_editor_open = True
+
+        # --------- load default templates on first run -------
+        if not self.default_system_message:
+            tmpl_dir = Path(__file__).resolve().parents[3]
+            self.default_system_message = (
+                tmpl_dir / "data/templates/system_message.jinja"
+            ).read_text()
+            self.default_initial_message = (
+                tmpl_dir / "data/templates/initial_message.jinja"
+            ).read_text()
+
+    @rx.var
+    def system_prompt_value(self) -> str:
+        return (
+            self.field.custom_system_message
+            if (self.field.custom_system_message or "").strip()
+            else self.default_system_message
+        )
+
+    @rx.var
+    def initial_prompt_value(self) -> str:
+        return (
+            self.field.custom_initial_message
+            if (self.field.custom_initial_message or "").strip()
+            else self.default_initial_message
+        )
 
     def set_type(self, type_: str):
         self.field.type_ = FieldType(type_)
@@ -190,6 +237,14 @@ class FieldEditorState(AppState):
         self.field.debriefing = is_checked
         if is_checked:
             self.field.required = True  # Automatically set 'Required' to True
+
+    def reset_system_prompt(self):
+        """Clear the override so the default template shows again."""
+        self.set_field("custom_system_message", "")
+
+    def reset_initial_prompt(self):
+        """Clear the override so the default template shows again."""
+        self.set_field("custom_initial_message", "")
 
 
 def field_is_enumerated_cond(
@@ -279,6 +334,10 @@ def field_editor_input_prompt(key: str):
 
 
 def field_editor():
+    def third_or_half() -> rx.Var[str]:
+        """Return '33%' when the prompt-editor is visible, else '50%'."""
+        return rx.cond(FieldEditorState.show_prompt_editor, "33%", "50%")
+
     return rx.form(
         rx.hstack(
             # Left column: Question details
@@ -399,6 +458,20 @@ def field_editor():
                                     rx.icon("info", size=16),
                                     content=tooltips["debriefing"],
                                 ),
+                                rx.cond(
+                                    FieldEditorState.field.debriefing,
+                                    rx.button(
+                                        "Edit System Prompts",
+                                        on_click=FieldEditorState.toggle_prompt_editor,
+                                        type="button",
+                                        variant="outline",
+                                        color_scheme="green",
+                                    ),
+                                ),
+                                rx.tooltip(
+                                    rx.icon("info", size=16),
+                                    content=tooltips["system_prompt"],
+                                ),
                                 align="center",
                             ),
                             # Minimum Time input for debriefing
@@ -452,7 +525,7 @@ def field_editor():
                     ),
                     align="start",
                 ),
-                width="50%",  # Adjust width as needed
+                width=third_or_half(),  # Adjust width as needed
                 align="start",
             ),
             # Right column: Answer Options panel for radio and checkbox
@@ -483,8 +556,68 @@ def field_editor():
                         ),
                         justify="start",
                     ),
-                    width="50%",  # Adjust width as needed
+                    width=third_or_half(),  # Adjust width as needed
                     align="start",
+                ),
+            ),
+            rx.cond(
+                FieldEditorState.show_prompt_editor,
+                rx.card(
+                    rx.vstack(
+                        rx.hstack(
+                            rx.text("System prompt", weight="bold"),
+                            rx.button(
+                                "Reset",
+                                on_click=FieldEditorState.reset_system_prompt,
+                                variant="outline",
+                                size="2",
+                                type="button",
+                            ),
+                            rx.tooltip(
+                                rx.icon("info", size=16),
+                                content=tooltips["system_prompt_edit"],
+                            ),
+                        ),
+                        rx.text_area(
+                            name="custom_system_message",
+                            placeholder="Fill the system prompt that governs the LLM behavior",
+                            value=FieldEditorState.system_prompt_value,
+                            on_change=lambda v: FieldEditorState.set_field(
+                                "custom_system_message", v
+                            ),
+                            rows="6",
+                            width="100%",
+                        ),
+                        rx.hstack(
+                            rx.text("Initial assistant message", weight="bold", mt="3"),
+                            rx.button(
+                                "Reset",
+                                on_click=FieldEditorState.reset_initial_prompt,
+                                variant="outline",
+                                size="2",
+                                type="button",
+                            ),
+                            rx.tooltip(
+                                rx.icon("info", size=16),
+                                content=tooltips["initial_message_edit"],
+                            ),
+                        ),
+                        rx.text_area(
+                            name="custom_initial_message",
+                            placeholder="Fill the initial message that the assistant will send to the user at first",
+                            value=FieldEditorState.initial_prompt_value,
+                            on_change=lambda v: FieldEditorState.set_field(
+                                "custom_initial_message", v
+                            ),
+                            rows="4",
+                            width="100%",
+                        ),
+                        spacing="2",
+                    ),
+                    bg=rx.color("gray", 2),
+                    p="3",
+                    border_radius="md",
+                    width="33%",
                 ),
             ),
             spacing="4",
@@ -514,6 +647,11 @@ def field_editor_modal():
                     field_editor(),
                 ),
             ),
+            style={
+                "width": "90vw",  # responsive
+                "maxWidth": "72rem",  # ≈ 6xl   raise or lower as you like
+            },
+            p="4",
         ),
         open=FieldEditorState.field_editor_open,
         on_open_change=FieldEditorState.handle_modal_open_change,
@@ -581,4 +719,60 @@ def static_field_editor():
             ),
         ),
         on_submit=FieldEditorState.handle_submit,
+    )
+
+
+class PromptEditorState(rx.State):
+    system_prompt: str = ""  # what you store in DB
+    initial_message: str = ""
+    editor_open: bool = False  # modal visibility
+
+    # -------- event handlers --------
+    def open_editor(self):
+        """Open the edit modal."""
+        self.editor_open = True  # returning None is fine here
+
+    def close_editor(self):
+        self.editor_open = False
+
+    def save(self, form_data: dict[str, str]):
+        """Persist both text areas and close the modal."""
+        self.system_prompt = form_data["system_prompt"]
+        self.initial_message = form_data["initial_message"]
+        self.editor_open = False
+        with rx.session() as session:  # SQL save
+            session.add(self)  # or your own table/model
+            session.commit()
+
+
+def prompt_editor_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.form(
+                rx.vstack(
+                    rx.text_area(
+                        name="system_prompt",
+                        placeholder="System prompt …",
+                        value=PromptEditorState.system_prompt,
+                        width="100%",
+                        rows=8,
+                    ),
+                    rx.text_area(
+                        name="initial_message",
+                        placeholder="Assistant’s first reply …",
+                        value=PromptEditorState.initial_message,
+                        width="100%",
+                        rows=5,
+                    ),
+                    rx.hstack(
+                        rx.dialog.close(rx.button("Cancel")),
+                        rx.button("Save", type="submit"),
+                        justify="end",
+                    ),
+                ),
+                on_submit=PromptEditorState.save,
+            ),
+        ),
+        open=PromptEditorState.editor_open,
+        on_open_change=PromptEditorState.set_editor_open,  # built-in setter
     )
