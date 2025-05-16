@@ -138,6 +138,10 @@ class FieldEditorState(AppState):
                 if txt:
                     verdict = check_prompt_compliance(
                         txt,
+                        api_key=self.config["AZURE_OPENAI_API_KEY"],
+                        api_version=self.config["AZURE_OPENAI_API_VERSION"],
+                        api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
+                        api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
                     )
 
                 if verdict == PromptVerdict.REJECT:
@@ -184,6 +188,8 @@ class FieldEditorState(AppState):
         self.form_owner_id = form_state.form.user_id
         if not self._user_has_access():
             return
+        self.show_prompt_editor = False
+        self.error = ""
         if self.field_id == "new":
             self.field = Field(
                 form_id=self.form_id, min_debriefing_time=1800, max_debriefing_time=3600
