@@ -294,9 +294,8 @@ def check_prompt_compliance(
         ],
     )
     verdict = resp.choices[0].message.content.strip().lower()
-    logger.debug(f"Prompt verdict: {verdict}")
     return (
         PromptVerdict(verdict)
         if verdict in PromptVerdict.__members__.values()
-        else PromptVerdict.REVIEW
+        else PromptVerdict.REJECT
     )
