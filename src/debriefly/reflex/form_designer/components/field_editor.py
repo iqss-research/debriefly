@@ -135,14 +135,16 @@ class FieldEditorState(AppState):
                 "system prompt": sys_prompt,
                 "initial message": init_msg,
             }.items():
-                if txt:
-                    verdict = check_prompt_compliance(
-                        txt,
-                        api_key=self.config["AZURE_OPENAI_API_KEY"],
-                        api_version=self.config["AZURE_OPENAI_API_VERSION"],
-                        api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
-                        api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
-                    )
+                if not txt:
+                    continue
+
+                verdict = check_prompt_compliance(
+                    txt,
+                    api_key=self.config["AZURE_OPENAI_API_KEY"],
+                    api_version=self.config["AZURE_OPENAI_API_VERSION"],
+                    api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
+                    api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
+                )
 
                 if verdict == PromptVerdict.REJECT:
                     self.error = f"{which.title()} rejected. Your prompt must be about cognitive debriefing."

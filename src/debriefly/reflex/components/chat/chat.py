@@ -59,6 +59,22 @@ def chat() -> rx.Component:
 def action_bar() -> rx.Component:
     return rx.center(
         rx.vstack(
+            # inactivity warning
+            rx.cond(
+                ChatState.paused,
+                rx.box(
+                    rx.text(
+                        "Please type the response. Timer will resume once you start typing.",
+                        color="green",
+                    ),
+                    padding="0.5em",
+                    background_color="lightgreen",
+                    border_radius="4px",
+                    margin_bottom="8px",
+                    width="100%",
+                ),
+                rx.fragment(),
+            ),
             # Conditionally show the message based on show_finish
             rx.cond(
                 ChatState.show_finish,
@@ -103,7 +119,7 @@ def action_bar() -> rx.Component:
                                         content="Enter your answer here",
                                     )
                                 ),
-                                placeholder="Type something...",
+                                placeholder="Enter your answer here",
                                 id="question",
                                 width=["15em", "20em", "45em", "50em", "50em", "50em"],
                             ),
@@ -139,6 +155,21 @@ def action_bar() -> rx.Component:
                                 id="finish_chat_button2",
                                 on_click=ChatState.finish_chat,
                             ),
+                        ),
+                        # Timer readout
+                        rx.text(
+                            "Elapsed: "
+                            + ChatState.elapsed_time_str
+                            + " / Min: "
+                            + ChatState.min_time_str
+                            + " – Max: "
+                            + ChatState.max_time_str,
+                            font_size="sm",
+                            color="gray.600",
+                        ),
+                        rx.tooltip(
+                            rx.icon("info", size=18),
+                            content="You can finish the conversation after the min time has elapsed. The max time is the time limit for the conversation.",
                         ),
                         align_items="center",
                         spacing="2",
