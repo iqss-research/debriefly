@@ -52,23 +52,57 @@ class ChatState(MainState):
     show_force_finish: bool = False  # Allow forced finish if max time exceeded
     is_preview: bool = FormEntryState.is_preview  # Inherit from FormEntryState
 
+    last_activity_time: float = 0.0  # timestamp of last keystroke
+    elapsed_time: int = 0  # accumulated seconds
+    paused: bool = False  # true when idle > 60s
+
+    @rx.var
+    def elapsed_time_str(self) -> str:
+        m, s = divmod(self.elapsed_time, 60)
+        return f"{int(m):02d}:{int(s):02d}"
+
+    @rx.var
+    def min_time_str(self) -> str:
+        m = (self.field.min_debriefing_time or 0) // 60
+        return f"{m:02d}:00"
+
+    @rx.var
+    def max_time_str(self) -> str:
+        m = (self.field.max_debriefing_time or 0) // 60
+        return f"{m:02d}:00"
+
     @rx.background
     async def count_time(self):
-        if self.chat_start_time is None:
-            return
         while not self.done:
-            elapsed = time.time() - self.chat_start_time
+            now = time.time()
+            idle = now - self.last_activity_time
             async with self:
-                if elapsed > self.field.min_debriefing_time:
-                    self.show_finish = True
-                if (
-                    elapsed >= self.field.max_debriefing_time
-                    and self.field.max_debriefing_time > 0
-                ):
-                    logger.info("Max debriefing time exceeded, forcing finish")
-                    self.show_finish = False  # Don't show finish if max time exceeded
-                    self.show_force_finish = True
-            logger.info("Elapsed time: %s seconds", elapsed)
+                if idle >= 60:
+                    # user idle: pause timer
+                    self.paused = True
+                else:
+                    # not idle: tick once per second
+                    if not self.paused:
+                        self.elapsed_time += 1
+                        # console trace
+                        logger.info(
+                            f"[chat {self.client_token}] "
+                            f"elapsed={self.elapsed_time}s "
+                            f"(min={self.field.min_debriefing_time}, "
+                            f"max={self.field.max_debriefing_time}, "
+                            f"paused={self.paused})"
+                        )
+                        # show finish/force-finish as before, but based on elapsed_time
+                        if self.elapsed_time > self.field.min_debriefing_time:
+                            self.paused = False
+                            self.show_finish = True
+                        if (
+                            self.field.max_debriefing_time > 0
+                            and self.elapsed_time >= self.field.max_debriefing_time
+                        ):
+                            self.show_finish = False
+                            self.show_force_finish = True
+                            self.paused = False
             await asyncio.sleep(1)
 
     async def on_load(self):
@@ -85,6 +119,10 @@ class ChatState(MainState):
         logger.info(
             f"Loading debriefing response for response {self.client_token} and form {state.form.id}"
         )
+        now = time.time()
+        self.last_activity_time = now
+        self.elapsed_time = 0
+        self.paused = False
 
         with rx.session() as session:
             response = session.exec(
@@ -153,6 +191,7 @@ class ChatState(MainState):
             )
             if self.field.min_debriefing_time == 0:
                 self.show_finish = True
+                self.paused = False
             if self.field.max_debriefing_time == 0:
                 self.show_finish = False
                 self.show_force_finish = True
@@ -201,6 +240,10 @@ class ChatState(MainState):
         question = form_data.get("question")
         if question is None or question == "":
             return
+
+        self.last_activity_time = time.time()
+        if self.paused:
+            self.paused = False
 
         model = self.openai_process_question
         async for value in model(question):
