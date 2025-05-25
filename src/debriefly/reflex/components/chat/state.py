@@ -50,7 +50,8 @@ class ChatState(MainState):
     )  # Default value to avoid None
     show_finish: bool = False  # New state variable to control visibility
     show_force_finish: bool = False  # Allow forced finish if max time exceeded
-    is_preview: bool = FormEntryState.is_preview  # Inherit from FormEntryState
+    is_preview: bool = False
+    # is_preview: bool = FormEntryState.is_preview  # Inherit from FormEntryState
 
     last_activity_time: float = 0.0  # timestamp of last keystroke
     elapsed_time: int = 0  # accumulated seconds
@@ -113,6 +114,7 @@ class ChatState(MainState):
         self.show_force_finish = False
 
         state = await self.get_state(FormEntryState)
+        self.is_preview = state.is_preview
         self.client_token = state._ensure_client_token()
         self.this_form_id = state.form.id
         self.this_form_code = state.form.code
