@@ -160,13 +160,4 @@ def _form_entry_success() -> rx.Component:
                 text_align="center",
             ),
         ),
-        rx.button(
-            "Close Survey",
-            on_click=rx.call_script("window.close()"),
-            color_scheme="green",
-            variant="solid",
-            padding="0.75em 1.5em",
-            font_size="lg",
-            _hover={"background_color": "green.600"},
-        ),
     )
