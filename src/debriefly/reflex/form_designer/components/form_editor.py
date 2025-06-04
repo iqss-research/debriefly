@@ -92,6 +92,8 @@ class FormEditorState(AppState):
                         existing_field.ordering = field.ordering
                         existing_field.min_debriefing_time = field.min_debriefing_time
                         existing_field.max_debriefing_time = field.max_debriefing_time
+                        existing_field.scale_min = field.scale_min
+                        existing_field.scale_max = field.scale_max
                         session.add(existing_field)
                         session.commit()
             return FormEditorState.load_form_by_id(self.form.id)

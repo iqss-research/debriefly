@@ -29,6 +29,7 @@ class FieldType(PyEnum):
     checkbox = "checkbox"
     radio = "radio"
     textarea = "textarea"
+    scale = "scale"
     static = "static"
     pagebreak = "pagebreak"
 
@@ -56,6 +57,8 @@ class Field(rx.Model, table=True):
     ordering: float = 0.0
     custom_system_message: Optional[str] = None
     custom_initial_message: Optional[str] = None
+    scale_min: Optional[int] = 1
+    scale_max: Optional[int] = 5
 
     form_id: int = sqlmodel.Field(foreign_key="form.id")
     options: list[Option] = sqlmodel.Relationship(

@@ -17,6 +17,7 @@ display_names = {
     "radio": "Radio Buttons",
     "checkbox": "Checkboxes",
     "textarea": "Large Text Area",
+    "scale": "Scale (slider)",
 }
 
 tooltips = {
@@ -51,6 +52,14 @@ class FieldEditorState(AppState):
 
     def toggle_prompt_editor(self):
         self.show_prompt_editor = not self.show_prompt_editor
+
+    def update_scale_min(self, v: str):
+        """Store the *current* slider minimum as an int (or clear if blank)."""
+        self.field.scale_min = int(v) if v else None
+
+    def update_scale_max(self, v: str):
+        """Store the *current* slider maximum as an int (or clear if blank)."""
+        self.field.scale_max = int(v) if v else None
 
     @rx.var
     def min_debriefing_time_in_minutes(self) -> int:
@@ -317,6 +326,14 @@ def field_is_enumerated_cond(
             ]
         ).contains(FieldEditorState.field.type_),
         if_enumerated,
+    )
+
+
+def field_is_scale_cond(content: rx.Component) -> rx.Component:
+    return rx.cond(
+        FieldEditorState.field.type_ == FieldType.scale.value,
+        content,
+        rx.fragment(),  # nothing if not scale
     )
 
 
@@ -616,6 +633,41 @@ def field_editor():
                         justify="start",
                     ),
                     width=third_or_half(),  # Adjust width as needed
+                    align="start",
+                ),
+            ),
+            field_is_scale_cond(
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Scale Range", weight="bold"),
+                        rx.tooltip(
+                            rx.icon("info", size=16),
+                            content="Choose the lowest and highest numbers the slider can take.",
+                        ),
+                        align="center",
+                    ),
+                    rx.hstack(
+                        rx.vstack(
+                            rx.text("Minimum", size="sm"),
+                            rx.input(
+                                type_="number",
+                                value=FieldEditorState.field.scale_min.to(str),
+                                on_change=FieldEditorState.update_scale_min,
+                                width="6em",
+                            ),
+                        ),
+                        rx.vstack(
+                            rx.text("Maximum", size="sm"),
+                            rx.input(
+                                type_="number",
+                                value=FieldEditorState.field.scale_max.to(str),
+                                on_change=FieldEditorState.update_scale_max,
+                                width="6em",
+                            ),
+                        ),
+                        spacing="4",
+                    ),
+                    width=third_or_half(),
                     align="start",
                 ),
             ),

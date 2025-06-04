@@ -14,6 +14,12 @@ class FormEntryState(rx.State):
     form: Form = Form()
     client_token: str = rx.Cookie("")
     is_preview: bool = False
+    current_scale_values: dict[str, int] = {}
+
+    def set_scale_value(self, name: str, v: str):
+        """Store the value coming from the slider (string → int)."""
+        if v:  # v is a Radix/BaseVar, still str-ish
+            self.current_scale_values[name] = int(v)
 
     def _ensure_client_token(self):
         if self.client_token == "":
