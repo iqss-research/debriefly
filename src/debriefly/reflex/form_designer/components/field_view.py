@@ -1,5 +1,6 @@
 import reflex as rx
 from debriefly.reflex.backend.models import Field, FieldType, Option
+from typing import Any
 
 
 class OptionItemCallable:
@@ -78,6 +79,59 @@ def field_checkbox(field: Field) -> rx.Component:
     )
 
 
+class ScaleValueState(rx.State):
+    """Stores the most-recent numeric value of every scale slider."""
+
+    values: dict[str, int] = {}
+
+    def set_value(self, name: str, v: Any):
+        """`v` from rx.slider is usually a one-element list like ['38']."""
+        if isinstance(v, (list, tuple)):
+            if not v:
+                return
+            v = v[0]
+
+        if v is None:
+            return
+
+        try:
+            v_int = int(float(v))
+        except (ValueError, TypeError):
+            return
+
+        self.values = {**self.values, name: v_int}
+
+
+def field_scale(field: Field) -> rx.Component:
+    """Slider that shows its current numeric value in real time."""
+    return rx.vstack(
+        rx.text(
+            "Current Value: ",
+            rx.cond(
+                ScaleValueState.values.contains(field.name),
+                ScaleValueState.values[field.name].to_string(),
+                field.scale_min.to_string(),
+            ),
+        ),
+        rx.slider(
+            name=field.name,
+            default_value=field.scale_min,
+            min_=field.scale_min,
+            max_=field.scale_max,
+            step=1,
+            width="100%",
+            on_change=lambda v: ScaleValueState.set_value(field.name, v),
+        ),
+        rx.hstack(
+            rx.text(field.scale_min),  # left anchor
+            rx.spacer(),
+            rx.spacer(),
+            rx.text(field.scale_max),  # right anchor
+        ),
+        width="100%",
+    )
+
+
 def field_input(field: Field, editing: bool = False):
     return rx.match(
         field.type_,
@@ -90,6 +144,7 @@ def field_input(field: Field, editing: bool = False):
                 name=field.name,
             ),
         ),
+        (FieldType.scale.value, field_scale(field)),
         (FieldType.static.value, rx.spacer()),
         (FieldType.pagebreak.value, rx.divider()),
         rx.input(
