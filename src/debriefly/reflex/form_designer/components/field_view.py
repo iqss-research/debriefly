@@ -116,8 +116,8 @@ def field_scale(field: Field) -> rx.Component:
         rx.slider(
             name=field.name,
             default_value=field.scale_min,
-            min_=field.scale_min,
-            max_=field.scale_max,
+            min=field.scale_min,
+            max=field.scale_max,
             step=1,
             width="100%",
             on_change=lambda v: ScaleValueState.set_value(field.name, v),

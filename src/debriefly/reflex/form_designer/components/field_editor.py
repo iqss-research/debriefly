@@ -123,6 +123,15 @@ class FieldEditorState(AppState):
         if needs_options and not any(opt.label.strip() for opt in self.field.options):
             missing.append("Answer Options")
 
+        if form_data.get("type_") == FieldType.scale.value:
+            min_val = self.field.scale_min
+            max_val = self.field.scale_max
+            if min_val is None or max_val is None:
+                missing.append("Scale Range")
+            elif min_val >= max_val:
+                self.error = "Scale minimum must be **less** than maximum."
+                return
+
         if missing:
             # show a single, clear message and abort the save
             self.error = f"The required field is not filled ({', '.join(missing)})."
@@ -650,7 +659,7 @@ def field_editor():
                         rx.vstack(
                             rx.text("Minimum", size="sm"),
                             rx.input(
-                                type_="number",
+                                type="number",
                                 value=FieldEditorState.field.scale_min.to(str),
                                 on_change=FieldEditorState.update_scale_min,
                                 width="6em",
@@ -659,7 +668,7 @@ def field_editor():
                         rx.vstack(
                             rx.text("Maximum", size="sm"),
                             rx.input(
-                                type_="number",
+                                type="number",
                                 value=FieldEditorState.field.scale_max.to(str),
                                 on_change=FieldEditorState.update_scale_max,
                                 width="6em",
