@@ -78,7 +78,7 @@ class ChatState(MainState):
             now = time.time()
             idle = now - self.last_activity_time
             async with self:
-                if idle >= 60:
+                if idle >= 120:
                     # user idle: pause timer
                     self.paused = True
                 else:
