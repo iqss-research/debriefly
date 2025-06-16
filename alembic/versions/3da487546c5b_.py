@@ -18,7 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE fieldtype ADD VALUE IF NOT EXISTS 'scale';")
+    bind = op.get_bind()
+    dialect = bind.dialect.name
+
+    if dialect == "sqlite":
+        # SQLite doesn't enforce enums at the DB level — nothing to do
+        pass
+    else:
+        op.execute("ALTER TYPE fieldtype ADD VALUE IF NOT EXISTS 'scale';")
 
 
 def downgrade() -> None:
