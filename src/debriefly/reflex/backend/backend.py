@@ -1,3 +1,4 @@
+import asyncio
 import reflex as rx
 from sqlmodel import select
 import logging
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 class MainState(rx.State):
     TOS_VERSION = "2025-06-19"
     _user_id: str = ""
+    user: User = User()
 
     user: User = User()
     base_url: str = ""
@@ -21,18 +23,32 @@ class MainState(rx.State):
             form = self.form
         return form is not None and form.user_id == self.user_id
 
-    async def init(self):
-        logger.info("Initializing MainState")
-        await self.load_config()
-        await self.load_user()
-
+    async def wait_for_user(self):
+        clerk_state = await self.get_state(clerk.ClerkState)
+        if clerk_state.user_id is None:  # still logging in
+            await asyncio.sleep(0.25)  # 250 ms pause
+            return MainState.wait_for_user()  # schedule myself again
+        self._user_id = clerk_state.user_id
+        await self._ensure_user_record()  # below
         if (
-            self.user_id
-            and self.user.tos_version != self.TOS_VERSION
+            self.user.tos_version != self.TOS_VERSION
             and self.router.page.path != "/consent"
         ):
-            # stop further page processing and send the browser to /consent
-            return rx.redirect("/consent")
+            return rx.redirect("/consent")  # first-time visitor
+
+    # 2 ─ Helper that mirrors the body of your old load_user()
+    async def _ensure_user_record(self):
+        with rx.session() as s:
+            db_user = s.exec(select(User).where(User.user_id == self._user_id)).first()
+            if db_user is None:  # new respondent
+                db_user = User(user_id=self._user_id)
+                s.add(db_user)
+                s.commit()
+            self.user = db_user
+
+    # 3 ─ Call wait_for_user once from every page
+    async def init(self):
+        return MainState.wait_for_user()
 
     @rx.var(cache=True)
     def user_id(self) -> str:

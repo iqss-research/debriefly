@@ -46,7 +46,7 @@ def info_footer() -> rx.Component:
             ),
             " | ",  # Separator
             rx.link(
-                "Admin",
+                "Admin Login",
                 href="/admin",
                 color=styles.text_color,
                 _hover={"color": styles.accent_text_color},

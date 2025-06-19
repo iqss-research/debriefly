@@ -1,19 +1,20 @@
 import reflex as rx
 from debriefly.reflex.form_designer import routes
 from debriefly.reflex.backend.models import Form
-from debriefly.reflex.backend.backend import MainState as AppState
+from debriefly.reflex.backend.backend import MainState
+from sqlmodel import select
+import asyncio
 
 
-class FormSelectState(AppState):
+class FormSelectState(MainState):
     forms: list[Form] = []
 
-    def load_forms(self):
-        if not self.user_id:  # Wait for user_id to be available
-            return
-        with rx.session() as session:
-            query = Form.select()
-            query = query.where(Form.user_id == self.user_id)
-            self.forms = list(session.exec(query).all())
+    async def load_forms(self):
+        if not self.user_id:
+            await asyncio.sleep(0.25)
+            return FormSelectState.load_forms()
+        with rx.session() as s:
+            self.forms = list(s.exec(select(Form).where(Form.user_id == self.user_id)))
 
     def on_select_change(self, value: str):
         if value == "":
