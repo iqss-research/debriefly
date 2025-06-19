@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class MainState(rx.State):
+    TOS_VERSION = "2025-06-19"
     _user_id: str = ""
 
     user: User = User()
@@ -24,6 +25,14 @@ class MainState(rx.State):
         logger.info("Initializing MainState")
         await self.load_config()
         await self.load_user()
+
+        if (
+            self.user_id
+            and self.user.tos_version != self.TOS_VERSION
+            and self.router.page.path != "/consent"
+        ):
+            # stop further page processing and send the browser to /consent
+            return rx.redirect("/consent")
 
     @rx.var(cache=True)
     def user_id(self) -> str:
@@ -61,6 +70,12 @@ class MainState(rx.State):
                 ).first()
             else:
                 self.user = user
+
+        if (
+            self.user.tos_version != self.TOS_VERSION
+            and self.router.page.path != "/consent"
+        ):
+            return rx.redirect("/consent")
 
     async def update_config(self, form_data: dict):
         main_state = await self.get_state(MainState)
