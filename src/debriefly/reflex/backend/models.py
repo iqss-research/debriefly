@@ -22,6 +22,8 @@ class Config(rx.Model, table=True):
 
 class User(rx.Model, table=True):
     user_id: str = Field(primary_key=True)
+    tos_version: str | None = None
+    tos_accepted_at: datetime | None = None
 
 
 class FieldType(PyEnum):

@@ -39,7 +39,7 @@ def template(page_content) -> rx.Component:
                     ),
                 ),
                 fallback=clerk.redirect_to_sign_in(),
-            )
+            ),
         ),
         appearance="light",
         has_background=True,
