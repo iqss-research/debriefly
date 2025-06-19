@@ -52,7 +52,7 @@ def consent() -> rx.Component:
                     "By clicking **I CONFIRM** below I accept the "
                     'Debriefly <a href="/terms" target="_blank">Terms of Service</a> '
                     "and consent to the collection and use of my data as described "
-                    "in the TK Privacy Statement."
+                    'in the TK <a href="/privacy" target="_blank">Privacy Statement</a>.'
                 ),
                 rx.button(
                     "I CONFIRM",

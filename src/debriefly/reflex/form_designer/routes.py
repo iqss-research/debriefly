@@ -9,6 +9,7 @@ RESPONSES = "/responses/[form_id]"
 RESPONSES_ANALYZE = "/responses/[form_id]/analyze"
 FEEDBACK = "/feedback"
 TERMS = "/terms"
+PRIVACY = "/privacy"
 ADMIN = "/admin"
 
 
