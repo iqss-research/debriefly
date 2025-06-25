@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "debriefly"
-version = "0.5.13"
+version = "0.6.0"
 authors = [
   {name="Vineet Bansal", email="vineetb@princeton.edu"}
 ]
