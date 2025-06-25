@@ -26,6 +26,8 @@ from debriefly.reflex.pages.feedback import feedback_page
 
 from debriefly.reflex.pages.terms import terms_of_service
 
+from debriefly.reflex.pages.privacy import privacy_statement
+
 from debriefly.reflex.pages.admin import admin
 
 from debriefly.reflex.pages.consent import consent
@@ -45,6 +47,7 @@ __all__ = [
     "_form_entry_success",
     "_responses",
     "terms_of_service",
+    "privacy_statement",
     "feedback_page",
     "admin",
     "consent",

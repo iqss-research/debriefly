@@ -38,7 +38,15 @@ def info_footer() -> rx.Component:
             ),
             " | ",  # Separator
             rx.link(
-                "Admin",
+                "Privacy Statement",
+                href="/privacy",
+                target="_blank",
+                color=styles.text_color,
+                _hover={"color": styles.accent_text_color},
+            ),
+            " | ",  # Separator
+            rx.link(
+                "Admin Login",
                 href="/admin",
                 color=styles.text_color,
                 _hover={"color": styles.accent_text_color},
