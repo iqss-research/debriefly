@@ -25,7 +25,15 @@ def upgrade() -> None:
         # SQLite doesn't enforce enums at the DB level — nothing to do
         pass
     else:
-        op.execute("ALTER TYPE fieldtype ADD VALUE IF NOT EXISTS 'scale';")
+        # https://stackoverflow.com/questions/53149484
+        op.execute("ALTER TABLE field ALTER COLUMN type_ TYPE VARCHAR(100);")
+        op.execute("DROP TYPE IF EXISTS fieldtype;")
+        op.execute(
+            "CREATE TYPE fieldtype AS ENUM ('text', 'checkbox', 'radio', 'textarea', 'scale', 'static', 'pagebreak');"
+        )
+        op.execute(
+            "ALTER TABLE field ALTER COLUMN type_ TYPE fieldtype USING type_::fieldtype;"
+        )
 
 
 def downgrade() -> None:
