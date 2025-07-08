@@ -30,6 +30,9 @@ class MainState(rx.State):
             return MainState.wait_for_user()  # schedule myself again
         self._user_id = clerk_state.user_id
         await self._ensure_user_record()  # below
+
+        await self.load_config()
+
         if (
             self.user.tos_version != self.TOS_VERSION
             and self.router.page.path != "/consent"

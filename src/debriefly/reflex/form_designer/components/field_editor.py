@@ -235,6 +235,9 @@ class FieldEditorState(AppState):
 
     @rx.var
     def system_prompt_value(self) -> str:
+        if self.show_prompt_editor:
+            return self.field.custom_system_message or ""
+
         return (
             self.field.custom_system_message
             if (self.field.custom_system_message or "").strip()
@@ -317,11 +320,11 @@ class FieldEditorState(AppState):
 
     def reset_system_prompt(self):
         """Clear the override so the default template shows again."""
-        self.set_field("custom_system_message", "")
+        self.set_field("custom_system_message", self.default_system_message)
 
     def reset_initial_prompt(self):
         """Clear the override so the default template shows again."""
-        self.set_field("custom_initial_message", "")
+        self.set_field("custom_initial_message", self.default_initial_message)
 
 
 def field_is_enumerated_cond(

@@ -288,44 +288,45 @@ def responses_page(**props):
         rx.vstack(
             rx.heading(f"Results for {ResponsesState.form.name}"),
             rx.hstack(
-                rx.tooltip(
-                    rx.cond(
-                        ResponsesState.index_is_current
-                        & ResponsesState.index_is_available
-                        & ResponsesState.has_chat_responses,
-                        rx.button(
-                            rx.hstack(
-                                rx.icon("play"),
-                                rx.text("Analyze Chats with AI"),
-                                spacing="2",
-                            ),
-                            on_click=rx.redirect(
-                                routes.form_responses_analyze(ResponsesState.form.id)
-                            ),
-                        ),
-                        rx.cond(
-                            ResponsesState.has_chat_responses,
-                            rx.button(
-                                rx.hstack(
-                                    rx.icon("play"),
-                                    rx.text("Analyze Chats with AI"),
-                                    spacing="2",
-                                ),
-                                on_click=ResponsesState.index,
-                            ),
-                            rx.button(
-                                rx.hstack(
-                                    rx.icon("play"),
-                                    rx.text("Analyze Chats with AI"),
-                                    spacing="2",
-                                ),
-                                color_scheme="gray",
-                                on_click=ResponsesState.index,
-                            ),
-                        ),
-                    ),
-                    content="Analyze Debriefing Transcripts with AI",
-                ),
+                # RAG component is disabled for now
+                # rx.tooltip(
+                #    rx.cond(
+                #        ResponsesState.index_is_current
+                #        & ResponsesState.index_is_available
+                #        & ResponsesState.has_chat_responses,
+                #        rx.button(
+                #            rx.hstack(
+                #                rx.icon("play"),
+                #                rx.text("Analyze Chats with AI"),
+                #                spacing="2",
+                #            ),
+                #            on_click=rx.redirect(
+                #                routes.form_responses_analyze(ResponsesState.form.id)
+                #            ),
+                #        ),
+                #        rx.cond(
+                #            ResponsesState.has_chat_responses,
+                #            rx.button(
+                #                rx.hstack(
+                #                    rx.icon("play"),
+                #                    rx.text("Analyze Chats with AI"),
+                #                    spacing="2",
+                #                ),
+                #                on_click=ResponsesState.index,
+                #            ),
+                #            rx.button(
+                #                rx.hstack(
+                #                    rx.icon("play"),
+                #                    rx.text("Analyze Chats with AI"),
+                #                    spacing="2",
+                #                ),
+                #                color_scheme="gray",
+                #                on_click=ResponsesState.index,
+                #            ),
+                #        ),
+                #    ),
+                #    content="Analyze Debriefing Transcripts with AI",
+                # ),
                 rx.tooltip(
                     rx.button(
                         rx.hstack(
