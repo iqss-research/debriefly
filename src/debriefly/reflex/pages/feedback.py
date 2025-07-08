@@ -79,6 +79,7 @@ def feedback_page() -> rx.Component:
                         content="Email to the Maintainer",
                     ),
                     href="mailto:knakamura@g.harvard.edu?subject=Debriefly%20Feedback",
+                    is_external=True,
                     text_decoration="none",
                 ),
                 spacing="4",
