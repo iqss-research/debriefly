@@ -235,8 +235,6 @@ class FieldEditorState(AppState):
 
     @rx.var
     def system_prompt_value(self) -> str:
-        if self.show_prompt_editor:
-            return self.field.custom_system_message or ""
 
         return (
             self.field.custom_system_message

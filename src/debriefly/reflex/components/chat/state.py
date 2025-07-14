@@ -121,6 +121,8 @@ class ChatState(MainState):
         logger.info(
             f"Loading debriefing response for response {self.client_token} and form {state.form.id}"
         )
+        main_state = await self.get_state(MainState)
+        self.config = main_state.config.copy()
         now = time.time()
         self.last_activity_time = now
         self.elapsed_time = 0
