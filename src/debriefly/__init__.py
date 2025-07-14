@@ -3,7 +3,7 @@ import logging.config
 import debriefly
 from debriefly.configuration import Config
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 
 logging.config.dictConfig(
