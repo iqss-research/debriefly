@@ -51,6 +51,7 @@ class MainState(rx.State):
 
     # 3 ─ Call wait_for_user once from every page
     async def init(self):
+        await self.load_config()
         return MainState.wait_for_user()
 
     @rx.var(cache=True)
