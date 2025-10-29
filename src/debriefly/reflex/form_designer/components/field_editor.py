@@ -104,6 +104,22 @@ class FieldEditorState(AppState):
         return self.form_owner_id == self.user_id
 
     def handle_submit(self, form_data: dict[str, str]):
+        if self.field.type_ == FieldType.static:
+            # Accept either key, but your static form currently uses "prompt"
+            txt = (
+                form_data.get("prompt") or form_data.get("field_prompt") or ""
+            ).strip()
+            if not txt:
+                self.error = "Plain Text cannot be empty."
+                return  # stay in modal, let the UI show the error
+            self.field.prompt = txt
+            self.error = ""
+            self.field_editor_open = False
+            return [
+                FormEditorState.update_field(self.field),
+                rx.redirect(routes.edit_form(self.form_id)),
+            ]
+
         # validating missingness
         missing: list[str] = []
 
@@ -168,8 +184,8 @@ class FieldEditorState(AppState):
                     self.error = f"{which.title()} rejected. Your prompt must be about cognitive debriefing."
                     return  # abort save, stay in modal
 
-        if self.field.type_ == FieldType.static:
-            self.field.prompt = form_data["prompt"]
+        # if self.field.type_ == FieldType.static:
+        #    self.field.prompt = form_data["prompt"]
         else:
             self.field.name = form_data["field_name"]
             self.field.type_ = form_data["type_"]
@@ -828,21 +844,15 @@ def field_edit_title():
 
 def static_field_editor():
     return rx.form(
-        rx.input(
-            type="hidden",
-            name="prompt",
-            value=FieldEditorState.field.prompt,
-            style={"display": "none"},
-        ),
         rx.vstack(
             rx.tabs.root(
                 rx.tabs.list(
                     rx.tabs.trigger("Edit", value="edit"),
                     rx.tabs.trigger("Preview", value="preview"),
+                    style={"marginTop": 0, "paddingTop": 0},
                 ),
                 rx.tabs.content(
                     rx.text_area(
-                        name="prompt",
                         placeholder="Your text content...",
                         value=FieldEditorState.field.prompt,
                         on_change=lambda v: FieldEditorState.set_field("prompt", v),
@@ -858,6 +868,21 @@ def static_field_editor():
                 ),
                 default_value="edit",
                 width="100%",
+            ),
+            rx.input(
+                type="hidden",
+                name="prompt",
+                value=FieldEditorState.field.prompt,
+                style={"display": "none"},
+            ),
+            rx.cond(
+                FieldEditorState.error,
+                rx.text(
+                    FieldEditorState.error,
+                    color="red",
+                    font_size="sm",
+                    font_weight="bold",
+                ),
             ),
             rx.hstack(
                 rx.dialog.close(rx.button("CANCEL")),
