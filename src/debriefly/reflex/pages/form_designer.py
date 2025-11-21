@@ -140,13 +140,14 @@ def _form_entry_success() -> rx.Component:
                         rx.text(
                             "Thank you for your responses. If you need to get paid, you need the following submission code:"
                         ),
-                        rx.button(
-                            rx.icon("copy"),
-                            FormEntryState.client_token,
-                            on_click=lambda: rx.set_clipboard(
-                                FormEntryState.client_token
-                            ),
-                        ),
+                        rx.text(FormEntryState.client_token),
+                        # rx.button(
+                        #    rx.icon("copy"),
+                        #    FormEntryState.client_token,
+                        #    on_click=lambda: rx.set_clipboard(
+                        #        FormEntryState.client_token
+                        #    ),
+                        # ),
                     ),
                     text_align="center",
                 ),
