@@ -88,7 +88,7 @@ class Form(rx.Model, table=True):
         sa_relationship_kwargs={
             "lazy": "selectin",
             "cascade": "all, delete",
-            "order_by": "Field.ordering",
+            "order_by": "Field.ordering, Field.id",
         },
     )
     responses: list["Response"] = sqlmodel.Relationship(

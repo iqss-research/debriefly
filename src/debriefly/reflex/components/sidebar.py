@@ -246,7 +246,7 @@ class SidebarState(MainState):
                 session.add(new_form)
                 session.commit()
                 session.refresh(new_form)
-            yield FormSelectState.load_forms
+            yield FormSelectState.refresh_forms
             yield rx.redirect(routes.edit_form(new_form.id))
             self.new_survey_name = ""
 
@@ -256,4 +256,4 @@ class SidebarState(MainState):
             if form and form.user_id == self.user_id:
                 session.delete(form)
                 session.commit()
-            yield FormSelectState.load_forms
+            yield FormSelectState.refresh_forms

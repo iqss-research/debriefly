@@ -1,5 +1,5 @@
 # Debriefly: A Tool for Improving Survey Questions via Automated Cognitive Debriefing
-Debriefly enables researchers to quickly improve survey question wording – ensuring that survey respondents use the same interpretations of survey questions as researchers intend. Debriefly does this by automating the venerable “cognitive debriefing” procedure, which involves administering the survey as usual and then having a detailed conversation with the respondent about the meaning of each question and answer.  Unfortunately, this expensive and time consuming process, although widely recognized as an essential part of survey construction, is infrequently used, leaving many survey data collections with dubious value. Debriefly solves this problem for researchers by engaging respondents in an automated conversational interface powered by a specially modified large language model (LLM). Debriefly implements methods described in our paper (Hinck, Ilavarasan, King, Nakamura, & Stewart, in progress).
+Debriefly enables researchers to quickly improve survey question wording – ensuring that survey respondents use the same interpretations of survey questions as researchers intend. Debriefly does this by automating the venerable “cognitive debriefing” procedure, which involves administering the survey as usual and then having a detailed conversation with the respondent about the meaning of each question and answer.  Unfortunately, this expensive and time consuming process, although widely recognized as an essential part of survey construction, is infrequently used, leaving many survey data collections with dubious value. Debriefly solves this problem for researchers by engaging respondents in an automated conversational interface powered by a specially modified large language model (LLM). Debriefly implements methods described in our paper (Hinck, King, Nakamura, & Stewart, in progress).
 
 ## Quick Start Guide
 ### Creating Surveys with Automated Cognitive Debriefing
@@ -39,4 +39,4 @@ Once your survey is live and responses have been collected, you can analyze the 
    - The LLM will search through the entire transcript and provide answers based on the conversation data.
 
 ## Reference
-Hinck, Musashi, Ilavarasan, Uma, King, Gary., Nakamura, Kentaro, & Stewart, Brandon M. (2025). Automated Cognitive Debriefing
+Hinck, Musashi, King, Gary., Nakamura, Kentaro, & Stewart, Brandon M. (2026). Where's the Evidence that Respondents Understand Your Survey Questions?

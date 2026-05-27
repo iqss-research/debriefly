@@ -9,7 +9,6 @@ from debriefly.reflex.form_designer.components import (
 from debriefly.reflex.form_designer.components import (
     FormEditorState,
     FieldEditorState,
-    FormSelectState,
 )
 from debriefly.reflex.form_designer.pages import (
     FormEntryState,
@@ -62,7 +61,7 @@ def _form_edit_id() -> rx.Component:
 @rx.page(
     route=routes.FORM_EDIT_NEW,
     title=form_edit_title(),
-    on_load=[MainState.init, FormSelectState.load_forms, FormEditorState.load_form],
+    on_load=[MainState.init, FormEditorState.load_form],
 )
 @template
 def _form_edit_new() -> rx.Component:

@@ -13,31 +13,43 @@ class MainState(rx.State):
     TOS_VERSION = "2025-06-19"
     _user_id: str = ""
     user: User = User()
-
-    user: User = User()
     base_url: str = ""
     config: dict[str, str] = {}
+    config_loaded: bool = False
+    config_loading: bool = False
 
     def _user_has_access(self, form: Form | None = None):
         if form is None and hasattr(self, "form"):
             form = self.form
         return form is not None and form.user_id == self.user_id
 
-    async def wait_for_user(self):
-        clerk_state = await self.get_state(clerk.ClerkState)
-        if clerk_state.user_id is None:  # still logging in
-            await asyncio.sleep(0.25)  # 250 ms pause
-            return MainState.wait_for_user()  # schedule myself again
-        self._user_id = clerk_state.user_id
-        await self._ensure_user_record()  # below
-
-        await self.load_config()
-
+    def _consent_redirect_if_needed(self):
         if (
             self.user.tos_version != self.TOS_VERSION
             and self.router.page.path != "/consent"
         ):
-            return rx.redirect("/consent")  # first-time visitor
+            return rx.redirect("/consent")
+
+    async def sync_user_from_clerk(self) -> bool:
+        clerk_state = await self.get_state(clerk.ClerkState)
+        if clerk_state.user_id is None:
+            return False
+
+        if self._user_id != clerk_state.user_id:
+            self._user_id = clerk_state.user_id
+            await self._ensure_user_record()
+        elif getattr(self.user, "user_id", None) != self._user_id:
+            await self._ensure_user_record()
+
+        return True
+
+    async def wait_for_user(self):
+        if not await self.sync_user_from_clerk():  # still logging in
+            await asyncio.sleep(0.25)  # 250 ms pause
+            return MainState.wait_for_user()  # schedule myself again
+
+        await self.load_config()
+        return self._consent_redirect_if_needed()
 
     # 2 ─ Helper that mirrors the body of your old load_user()
     async def _ensure_user_record(self):
@@ -51,21 +63,38 @@ class MainState(rx.State):
 
     # 3 ─ Call wait_for_user once from every page
     async def init(self):
-        await self.load_config()
+        if await self.sync_user_from_clerk():
+            await self.load_config()
+            return self._consent_redirect_if_needed()
+
         return MainState.wait_for_user()
 
     @rx.var(cache=True)
     def user_id(self) -> str:
         return self._user_id
 
-    async def load_config(self):
+    async def load_config(self, force: bool = False):
+        if self.config_loaded and not force:
+            return
+        if self.config_loading and not force:
+            return
+
         logger.info("Loading config")
-        with rx.session() as session:
-            for config in session.exec(select(Config)):
-                logger.info("Loading config: %s", config.name)
-                self.config[config.name] = config.value
-                if config.name == "BASE_URL":
-                    self.base_url = config.value
+        self.config_loading = True
+        try:
+            with rx.session() as session:
+                config_values = {}
+                base_url = self.base_url
+                for config in session.exec(select(Config)):
+                    logger.info("Loading config: %s", config.name)
+                    config_values[config.name] = config.value
+                    if config.name == "BASE_URL":
+                        base_url = config.value
+                self.config = config_values
+                self.base_url = base_url
+                self.config_loaded = True
+        finally:
+            self.config_loading = False
 
     async def load_user(self):
         state = await self.get_state(clerk.ClerkState)
@@ -105,7 +134,7 @@ class MainState(rx.State):
                 if config is not None:
                     config.value = value
             session.commit()
-            await main_state.init()
+            await main_state.load_config(force=True)
         return rx.toast.success("Config updated successfully")
 
     async def update_user(self, form_data: dict):

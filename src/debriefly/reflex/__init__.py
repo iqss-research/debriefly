@@ -1,6 +1,9 @@
 import reflex as rx
+import reflex_clerk as clerk
 from debriefly.reflex import styles
 from debriefly.reflex.backend.backend import MainState
+
+clerk.ClerkState.set_fetch_user_on_auth(False)
 
 try:
     import debriefly.reflex.pages  # noqa
