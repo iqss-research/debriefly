@@ -8,6 +8,7 @@ if "field_id" not in rx.State.__fields__:
 
 
 from debriefly.reflex.pages.index import index
+from debriefly.reflex.pages.signin import signin
 from debriefly.reflex.pages.user import user
 from debriefly.reflex.pages.config import config
 from debriefly.reflex.pages.chat import chat
@@ -35,6 +36,7 @@ from debriefly.reflex.pages.consent import consent
 # specify pages that are loaded by default
 __all__ = [
     "index",
+    "signin",
     "user",
     "config",
     "chat",
