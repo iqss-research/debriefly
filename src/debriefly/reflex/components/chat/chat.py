@@ -199,13 +199,25 @@ def chat_ui() -> rx.Component:
         ~ChatState.loaded,
         rx.spinner(),
         rx.cond(
-            ChatState.done,
-            rx.spinner(),
-            rx.vstack(
-                chat(),
-                action_bar(),
-                id="chat_ui",  # Add this line
-                height="100%",
+            ChatState.error != "",
+            rx.center(
+                rx.card(
+                    rx.text(ChatState.error),
+                    max_width="32rem",
+                    text_align="center",
+                    p="6",
+                ),
+                min_height="100vh",
+            ),
+            rx.cond(
+                ChatState.done,
+                rx.spinner(),
+                rx.vstack(
+                    chat(),
+                    action_bar(),
+                    id="chat_ui",  # Add this line
+                    height="100%",
+                ),
             ),
         ),
     )

@@ -204,10 +204,7 @@ def sidebar() -> rx.Component:
                 width="100%",  # Ensure full width
             ),
             sidebar_item("Feedback", "/feedback", "message_square"),
-            clerk.protect(
-                sidebar_item("Config", "/config", "cog"),
-                permission="org:app:admin",
-            ),
+            sidebar_item("OpenAI Key", "/user", "key"),
             rx.spacer(),
             rx.divider(),
             info_footer(),

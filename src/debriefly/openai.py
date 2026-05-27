@@ -1,23 +1,16 @@
 import os
-from functools import cache
 import logging
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.live import Live
 import time
-from openai import AzureOpenAI
+from openai import OpenAI
 
-from azure.core.credentials import AzureKeyCredential
-from azure.search.documents import SearchClient
-from azure.search.documents.indexes import SearchIndexClient
-from azure.search.documents.indexes.models import (
-    SearchIndex,
-    SearchField,
-    SearchFieldDataType,
-)
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 
 
 class Client:
@@ -44,26 +37,24 @@ class Client:
         end_token="<end_of_chat>",
     ):
 
-        api_key = api_key or os.getenv("AZURE_OPENAI_API_KEY")
-        api_version = api_version or os.getenv("AZURE_OPENAI_API_VERSION")
-        api_endpoint = api_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
-        api_model = api_model or os.getenv("AZURE_OPENAI_DEPLOYMENT_MODEL")
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
+        api_model = api_model or os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
+
+        if not api_key:
+            raise ValueError("OpenAI API key is required.")
 
         self.client = self.model = None
         self.initial_message = initial_message
         self.temperature = temperature
         self.end_token = end_token
 
-        self.system_message = (
-            system_message
-            + f"\nInclude the special {self.end_token} token in the response to end the chat."
-        )
+        self.system_message = system_message
+        if self.end_token:
+            self.system_message += f"\nInclude the special {self.end_token} token in the response to end the chat."
 
-        logger.debug("Instantiating AzureOpenAI client")
-        self.client = AzureOpenAI(
+        logger.debug("Instantiating OpenAI client")
+        self.client = OpenAI(
             api_key=api_key,
-            api_version=api_version,
-            azure_endpoint=api_endpoint,
         )
         self.model = api_model
 
@@ -121,105 +112,6 @@ class Client:
         return transcript
 
 
-class AzureOpenAISearch:
-    """
-    A class that encapsulates the Azure OpenAI and Azure Search functionalities (semantic search and RAG: retrieved-augmented generation).
-    """
-
-    @staticmethod
-    def survey_id_to_index_name(survey_id: str) -> str:
-        """
-        Convert a qualtrics survey id to an Azure Search index name
-        Index name must only contain lowercase letters, digits or dashes,
-        cannot start or end with dashes and is limited to 128 characters.
-        """
-        index_name = survey_id.lower().replace("_", "-")[:128]
-        logger.debug(f"Converted {survey_id=} to {index_name=}")
-        return index_name
-
-    def __init__(
-        self,
-        index_name,
-        api_key=None,
-        api_version=None,
-        api_endpoint=None,
-        api_model=None,
-        search_key=None,
-        search_endpoint=None,
-    ):
-        self.openai_client = get_client(
-            api_key=api_key,
-            api_version=api_version,
-            api_endpoint=api_endpoint,
-            api_model=api_model,
-        )
-
-        self.index_name = index_name
-        self.search_index = SearchIndex(
-            name=self.index_name,
-            fields=[
-                SearchField(name="id", type=SearchFieldDataType.String, key=True),
-                SearchField(name="content", type=SearchFieldDataType.String),
-            ],
-        )
-
-        self.admin_key = search_key or os.getenv("AZURE_OPENAI_SEARCH_KEY")
-        self.credential = AzureKeyCredential(self.admin_key)
-
-        self.azure_search_service_endpoint = search_endpoint or os.getenv(
-            "AZURE_OPENAI_SEARCH_ENDPOINT"
-        )
-        self.search_index_client = SearchIndexClient(
-            endpoint=self.azure_search_service_endpoint,
-            index_name=self.index_name,
-            credential=self.credential,
-        )
-        self.search_client = SearchClient(
-            endpoint=self.azure_search_service_endpoint,
-            index_name=self.index_name,
-            credential=self.credential,
-        )
-
-    def upload(self, documents: dict[str, str]):
-        """
-        Upload documents to the Azure Search database
-        """
-        self.search_index_client.create_or_update_index(self.search_index)
-
-        # Upload your list of strings to the index
-        docs = [{"id": k, "content": v} for k, v in documents.items()]
-        self.search_client.upload_documents(docs)
-
-    def rag(self, query: str):
-        extra_body = {
-            "data_sources": [
-                {
-                    "type": "azure_search",
-                    "parameters": {
-                        "endpoint": self.azure_search_service_endpoint,
-                        "index_name": self.index_name,
-                        "authentication": {
-                            "type": "api_key",
-                            "key": self.admin_key,
-                        },
-                    },
-                }
-            ],
-        }
-        gen = self.openai_client.complete(
-            user_input=query, chat_history=[], stream=False, extra_body=extra_body
-        )
-        # We get a generator with a single response back - consume it and return to caller
-        result = list(gen)[0]
-
-        return result
-
-    def delete_index(self):
-        logger.info(f"Deleting index {self.index_name}")
-        self.search_index_client.delete_index(self.search_index)
-
-
-@cache
 def get_client(
     missing_ok=True,
     initial_message="",
@@ -264,13 +156,12 @@ def check_prompt_compliance(
     api_model: str | None = None,
 ) -> PromptVerdict:
 
-    client = AzureOpenAI(
-        api_key=api_key or os.getenv("AZURE_OPENAI_API_KEY"),
-        api_version=api_version or os.getenv("AZURE_OPENAI_API_VERSION"),
-        azure_endpoint=api_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT"),
-    )
+    key = api_key or os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise ValueError("OpenAI API key is required.")
 
-    deployment = api_model or os.getenv("AZURE_OPENAI_DEPLOYMENT_MODEL")
+    client = OpenAI(api_key=key)
+    model = api_model or os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
 
     system = (
         "You are a policy checker for a *cognitive-debriefing* survey tool.\n"
@@ -285,7 +176,7 @@ def check_prompt_compliance(
     )
 
     resp = client.chat.completions.create(
-        model=deployment,
+        model=model,
         temperature=0,
         stream=False,
         messages=[
@@ -294,8 +185,7 @@ def check_prompt_compliance(
         ],
     )
     verdict = resp.choices[0].message.content.strip().lower()
-    return (
-        PromptVerdict(verdict)
-        if verdict in PromptVerdict.__members__.values()
-        else PromptVerdict.REJECT
-    )
+    try:
+        return PromptVerdict(verdict)
+    except ValueError:
+        return PromptVerdict.REJECT

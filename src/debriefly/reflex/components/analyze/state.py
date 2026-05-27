@@ -1,6 +1,8 @@
 import reflex as rx
 import logging
-from debriefly.openai import AzureOpenAISearch
+import openai
+from debriefly.openai import get_client
+from debriefly.reflex.backend.models import UserOpenAISettings
 from debriefly.reflex.form_designer.pages.response import ResponsesState
 
 logger = logging.getLogger(__name__)
@@ -38,46 +40,60 @@ class AnalysisState(ResponsesState):
         self.processing = True
         yield
 
-        messages = []
-        for qa in self.chat:
+        context = self.debriefing_context()
+        if not context:
+            self.chat[-1].answer = "No debriefing chat transcripts are available."
+            self.processing = False
+            yield
+            return
+
+        with rx.session() as session:
+            settings = UserOpenAISettings.get_for_user(session, self.form.user_id)
+            if settings is None or not settings.is_configured:
+                self.chat[-1].answer = "Add your OpenAI API key before using analysis."
+                self.processing = False
+                yield
+                return
+            api_key = settings.api_key
+            api_model = settings.model
+
+        client = get_client(
+            missing_ok=False,
+            api_key=api_key,
+            api_model=api_model,
+            system_message=(
+                "You analyze cognitive debriefing survey transcripts. "
+                "Answer using only the transcript context provided by the system. "
+                "If the context is insufficient, say so."
+            ),
+            end_token="",
+        )
+
+        messages = [
+            {
+                "role": "system",
+                "content": f"{client.system_message}\n\nTranscript context:\n{context}",
+            }
+        ]
+        for qa in self.chat[:-1]:
             messages.append({"role": "user", "content": qa.question})
             messages.append({"role": "assistant", "content": qa.answer})
-        messages = messages[:-1]
 
-        logger.info(f"Querying index {self.form.index_name}")
-        client = AzureOpenAISearch(
-            index_name=self.form.index_name,
-            api_key=self.config["AZURE_OPENAI_API_KEY"],
-            api_version=self.config["AZURE_OPENAI_API_VERSION"],
-            api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
-            api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
-            search_key=self.config["AZURE_OPENAI_SEARCH_KEY"],
-            search_endpoint=self.config["AZURE_OPENAI_SEARCH_ENDPOINT"],
-        )
+        messages.append({"role": "user", "content": question})
 
-        extra_body = {
-            "data_sources": [
-                {
-                    "type": "azure_search",
-                    "parameters": {
-                        "endpoint": client.azure_search_service_endpoint,
-                        "index_name": client.index_name,
-                        "authentication": {
-                            "type": "api_key",
-                            "key": client.admin_key,
-                        },
-                    },
-                }
-            ],
-        }
-
-        session = client.openai_client.client.chat.completions.create(
-            model=client.openai_client.model,
-            messages=messages,
-            temperature=client.openai_client.temperature,
-            stream=True,
-            extra_body=extra_body,
-        )
+        try:
+            session = client.client.chat.completions.create(
+                model=client.model,
+                messages=messages,
+                temperature=client.temperature,
+                stream=True,
+            )
+        except openai.OpenAIError as e:
+            logger.error(f"OpenAI API error: {e}")
+            self.chat[-1].answer = "The analysis could not contact OpenAI."
+            self.processing = False
+            yield
+            return
 
         # Stream the results, yielding after every word.
         for item in session:
@@ -96,22 +112,29 @@ class AnalysisState(ResponsesState):
                 self.chat = self.chat
                 yield
 
-        if client.openai_client.end_token in self.chat[-1].answer:
-            self.done = True
-            self.chat[-1].answer = self.chat[-1].answer.replace(client.end_token, "")
-
-            # Delete the index
-            client = AzureOpenAISearch(
-                index_name=self.form.index_name,
-                api_key=self.config["AZURE_OPENAI_API_KEY"],
-                api_version=self.config["AZURE_OPENAI_API_VERSION"],
-                api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
-                api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
-                search_key=self.config["AZURE_OPENAI_SEARCH_KEY"],
-                search_endpoint=self.config["AZURE_OPENAI_SEARCH_ENDPOINT"],
-            )
-            logger.info(f"Deleting index {self.form.index_name}")
-            client.delete_index()
-
         # Toggle the processing flag.
         self.processing = False
+
+    def debriefing_context(self) -> str:
+        chunks = []
+        for response in self.responses:
+            response_chunks = []
+            for field in self.form.fields:
+                messages = self.response_debriefings.get(response.id, {}).get(
+                    field.id, []
+                )
+                if not messages:
+                    continue
+
+                transcript = "\n".join(
+                    f"{message['role']}: {message['content']}" for message in messages
+                )
+                response_chunks.append(f"Field {field.name}:\n{transcript}")
+
+            if response_chunks:
+                chunks.append(
+                    f"Response {response.client_token}:\n"
+                    + "\n\n".join(response_chunks)
+                )
+
+        return "\n\n---\n\n".join(chunks)

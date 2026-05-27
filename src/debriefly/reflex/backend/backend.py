@@ -3,7 +3,8 @@ import reflex as rx
 from sqlmodel import select
 import logging
 import reflex_clerk as clerk
-from debriefly.reflex.backend.models import Config, User, Form
+from debriefly.openai import DEFAULT_OPENAI_MODEL
+from debriefly.reflex.backend.models import Config, User, Form, UserOpenAISettings
 
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,8 @@ class MainState(rx.State):
     config: dict[str, str] = {}
     config_loaded: bool = False
     config_loading: bool = False
+    openai_api_key_configured: bool = False
+    openai_model: str = DEFAULT_OPENAI_MODEL
 
     def _user_has_access(self, form: Form | None = None):
         if form is None and hasattr(self, "form"):
@@ -41,6 +44,7 @@ class MainState(rx.State):
         elif getattr(self.user, "user_id", None) != self._user_id:
             await self._ensure_user_record()
 
+        self.load_openai_settings_status()
         return True
 
     async def wait_for_user(self):
@@ -86,6 +90,8 @@ class MainState(rx.State):
                 config_values = {}
                 base_url = self.base_url
                 for config in session.exec(select(Config)):
+                    if config.name != "BASE_URL":
+                        continue
                     logger.info("Loading config: %s", config.name)
                     config_values[config.name] = config.value
                     if config.name == "BASE_URL":
@@ -95,6 +101,21 @@ class MainState(rx.State):
                 self.config_loaded = True
         finally:
             self.config_loading = False
+
+    def load_openai_settings_status(self):
+        if not self._user_id:
+            self.openai_api_key_configured = False
+            self.openai_model = DEFAULT_OPENAI_MODEL
+            return
+
+        with rx.session() as session:
+            settings = UserOpenAISettings.get_for_user(session, self._user_id)
+            self.openai_api_key_configured = bool(
+                settings is not None and settings.is_configured
+            )
+            self.openai_model = (
+                settings.model if settings is not None else DEFAULT_OPENAI_MODEL
+            )
 
     async def load_user(self):
         state = await self.get_state(clerk.ClerkState)
@@ -119,6 +140,8 @@ class MainState(rx.State):
                 ).first()
             else:
                 self.user = user
+
+        self.load_openai_settings_status()
 
         if (
             self.user.tos_version != self.TOS_VERSION

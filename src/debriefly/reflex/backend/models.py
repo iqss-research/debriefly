@@ -6,7 +6,8 @@ from enum import Enum as PyEnum
 import sqlmodel
 import json
 from reflex.utils.serializers import serializer
-from debriefly.openai import AzureOpenAISearch
+from sqlalchemy.exc import OperationalError
+from debriefly.openai import DEFAULT_OPENAI_MODEL
 
 
 class Config(rx.Model, table=True):
@@ -24,6 +25,44 @@ class User(rx.Model, table=True):
     user_id: str = Field(primary_key=True)
     tos_version: str | None = None
     tos_accepted_at: datetime | None = None
+
+
+class UserOpenAISettings(rx.Model, table=True):
+    __tablename__ = "user_openai_settings"
+
+    user_id: str = Field(primary_key=True, foreign_key="user.user_id")
+    api_key: str
+    model: str = DEFAULT_OPENAI_MODEL
+
+    @classmethod
+    def _ensure_table(cls, session):
+        cls.__table__.create(session.get_bind(), checkfirst=True)
+
+    @classmethod
+    def get_for_user(cls, session, user_id: str | None):
+        if not user_id:
+            return None
+        try:
+            return session.get(cls, user_id)
+        except OperationalError as exc:
+            if "no such table" not in str(exc):
+                raise
+            session.rollback()
+            cls._ensure_table(session)
+            return None
+
+    @classmethod
+    def get_for_form(cls, session, form_id: int | str | None):
+        if form_id in (None, ""):
+            return None
+        form = session.get(Form, int(form_id))
+        if form is None:
+            return None
+        return cls.get_for_user(session, form.user_id)
+
+    @property
+    def is_configured(self) -> bool:
+        return bool((self.api_key or "").strip())
 
 
 class FieldType(PyEnum):
@@ -118,21 +157,9 @@ class Form(rx.Model, table=True):
         return datetime.now(last_indexed.tzinfo) > last_indexed + timedelta(minutes=2)
 
     def index(self):
-        with rx.session() as session:
-            client = AzureOpenAISearch(
-                index_name=self.index_name,
-                api_key=Config.get_config(session, "AZURE_OPENAI_API_KEY"),
-                api_version=Config.get_config(session, "AZURE_OPENAI_API_VERSION"),
-                api_endpoint=Config.get_config(session, "AZURE_OPENAI_ENDPOINT"),
-                api_model=Config.get_config(session, "AZURE_OPENAI_DEPLOYMENT_MODEL"),
-                search_key=Config.get_config(session, "AZURE_OPENAI_SEARCH_KEY"),
-                search_endpoint=Config.get_config(
-                    session, "AZURE_OPENAI_SEARCH_ENDPOINT"
-                ),
-            )
-            client.delete_index()
-            client.upload(self.debriefing_transcripts())
-            self.indexed_ts = datetime.now(timezone.utc)
+        # Legacy Azure Search indexing is deprecated. Analysis now reads
+        # transcripts directly and uses the form owner's OpenAI API key.
+        self.indexed_ts = datetime.now(timezone.utc)
 
     def debriefing_transcripts(self) -> dict[str, str]:
         transcripts = {}

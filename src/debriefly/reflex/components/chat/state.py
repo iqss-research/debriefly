@@ -14,8 +14,10 @@ from debriefly.reflex.backend.models import (
     Response,
     FieldValue,
     Field,
+    Form,
     Option,
     FieldType,
+    UserOpenAISettings,
 )
 from debriefly.reflex.form_designer.pages.form_entry import (
     FormEntryState,
@@ -43,6 +45,7 @@ class ChatState(MainState):
     chat: list[QA]
     processing: bool = False
     done: bool = False  # done with current chat?
+    error: str = ""
     system_message: str
     initial_message: str
     field: Field = Field(
@@ -109,20 +112,19 @@ class ChatState(MainState):
     async def on_load(self):
         logger.info("ChatState on_load")
         self.done = False
+        self.error = ""
         self.chat_start_time = time.time()
         self.show_finish = False
         self.show_force_finish = False
 
-        state = await self.get_state(FormEntryState)
-        self.is_preview = state.is_preview
-        self.client_token = state._ensure_client_token()
-        self.this_form_id = state.form.id
-        self.this_form_code = state.form.code
+        entry_state = await self.get_state(FormEntryState)
+        self.is_preview = entry_state.is_preview
+        self.client_token = entry_state._ensure_client_token()
+        self.this_form_id = entry_state.form.id
+        self.this_form_code = entry_state.form.code
         logger.info(
-            f"Loading debriefing response for response {self.client_token} and form {state.form.id}"
+            f"Loading debriefing response for response {self.client_token} and form {entry_state.form.id}"
         )
-        main_state = await self.get_state(MainState)
-        self.config = main_state.config.copy()
         now = time.time()
         self.last_activity_time = now
         self.elapsed_time = 0
@@ -148,8 +150,8 @@ class ChatState(MainState):
             response_id = response.id
             logger.info(f"Obtained response_id: {response_id}")
 
-            state = await self.get_state(FormEntryTabState)
-            field_id = state.fields[state.active_tab][-1].id
+            tab_state = await self.get_state(FormEntryTabState)
+            field_id = tab_state.fields[tab_state.active_tab][-1].id
             self.field = session.exec(select(Field).where(Field.id == field_id)).first()
             if self.field is None:
                 logger.error(f"No field found with ID {field_id}")
@@ -233,8 +235,15 @@ class ChatState(MainState):
 
             self.chat = [QA(question="", answer=self.initial_message)]
 
+            settings = UserOpenAISettings.get_for_user(
+                session, entry_state.form.user_id
+            )
+            if settings is None or not settings.is_configured:
+                self.error = "This survey is not ready for chat. Please contact the survey owner."
+
             if (
-                not self.show_force_finish
+                not self.error
+                and not self.show_force_finish
                 and self.field.min_debriefing_time > 0
                 and self.field.max_debriefing_time > 0
             ):
@@ -254,13 +263,30 @@ class ChatState(MainState):
             yield value
 
     async def openai_process_question(self, question: str):
+        if self.error:
+            return
+
+        with rx.session() as session:
+            form = session.get(Form, self.this_form_id)
+            settings = (
+                UserOpenAISettings.get_for_user(session, form.user_id)
+                if form is not None
+                else None
+            )
+
+            if settings is None or not settings.is_configured:
+                self.error = "This survey is not ready for chat. Please contact the survey owner."
+                return
+
+            api_key = settings.api_key
+            api_model = settings.model
+
         client = get_client(
+            missing_ok=False,
             initial_message=self.initial_message,
             system_message=self.system_message,
-            api_key=self.config["AZURE_OPENAI_API_KEY"],
-            api_version=self.config["AZURE_OPENAI_API_VERSION"],
-            api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
-            api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
+            api_key=api_key,
+            api_model=api_model,
         )
 
         # Add the question to the list of questions.
@@ -295,11 +321,14 @@ class ChatState(MainState):
                 temperature=client.temperature,
                 stream=True,
             )
-        except openai.BadRequestError as e:
+        except openai.OpenAIError as e:
             logger.error(f"OpenAI API error: {e}")
             # Remove the last user message that caused the error
             self.chat = self.chat[:-1]
             self.processing = False
+            self.error = (
+                "The chat could not contact OpenAI. Please contact the survey owner."
+            )
             return
 
         # Stream the results, yielding after every word.
