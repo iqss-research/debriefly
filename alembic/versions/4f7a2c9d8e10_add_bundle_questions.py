@@ -7,9 +7,9 @@ Create Date: 2026-05-27 00:00:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
+from alembic import op
 
 
 # revision identifiers, used by Alembic.
@@ -20,10 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    if bind.dialect.name != "sqlite":
-        op.execute("ALTER TYPE fieldtype ADD VALUE IF NOT EXISTS 'bundle';")
-
     op.create_table(
         "bundleitem",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -41,5 +37,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("bundleitem")
-    # PostgreSQL enum values cannot be safely removed in-place across supported
-    # versions, so the added `bundle` value is intentionally left in place.
