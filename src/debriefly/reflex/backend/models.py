@@ -87,11 +87,21 @@ class Option(rx.Model, table=True):
     field_id: int = sqlmodel.Field(foreign_key="field.id")
 
 
+class BundleItem(rx.Model, table=True):
+    label: str = ""
+    value: str = ""
+    ordering: float = 0.0
+
+    field_id: int = sqlmodel.Field(foreign_key="field.id")
+
+
 class Field(rx.Model, table=True):
     name: str = ""
     type_: FieldType = FieldType.text
     required: bool = False
+    bundled: bool = False
     debriefing: bool = False
+    allow_back: bool = False
     min_debriefing_time: Optional[int] = None
     max_debriefing_time: Optional[int] = None
     prompt: str = ""
@@ -107,6 +117,13 @@ class Field(rx.Model, table=True):
             "lazy": "selectin",
             "cascade": "all, delete",
             "order_by": "Option.id",
+        },
+    )
+    bundle_items: list[BundleItem] = sqlmodel.Relationship(
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete",
+            "order_by": "BundleItem.ordering, BundleItem.id",
         },
     )
     field_values: list["FieldValue"] = sqlmodel.Relationship(

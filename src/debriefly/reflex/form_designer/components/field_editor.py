@@ -3,6 +3,7 @@ import reflex as rx
 from pathlib import Path
 from debriefly.reflex.form_designer import constants, routes, utils
 from debriefly.reflex.backend.models import (
+    BundleItem,
     Field,
     FieldType,
     Option,
@@ -30,8 +31,10 @@ tooltips = {
     "question_text": "The text of the question that will be displayed to the survey participants.",
     "answer_format": "The format in which the survey participants will provide their answers.",
     "required": "If checked, the survey participants must answer this question to proceed.",
+    "bundled": "If checked, this question repeats the selected answer format across several subquestions or row items.",
     "debriefing": "If checked, this question will be used for automated cognitive debriefing purposes.",
     "answer_options": "The list of options for the survey participants to choose from (for radio or checkbox formats).",
+    "bundle_items": "The subquestions or row labels respondents will answer under the main question.",
     "minimum_time": "The minimum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the participants can finish the conversation.",
     "maximum_time": "The maximum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the conversation will be ended automatically.",
     "system_prompt": "Edit the system prompt that governs the LLM behavior (Caution: you must check if your prompt works well in your context).",
@@ -144,6 +147,12 @@ class FieldEditorState(AppState):
         if needs_options and not any(opt.label.strip() for opt in self.field.options):
             missing.append("Answer Options")
 
+        is_bundle = bool(form_data.get("bundled"))
+        if is_bundle and not any(
+            item.label.strip() for item in self.field.bundle_items
+        ):
+            missing.append("Bundle Items")
+
         if form_data.get("type_") == FieldType.scale.value:
             min_val = self.field.scale_min
             max_val = self.field.scale_max
@@ -209,6 +218,7 @@ class FieldEditorState(AppState):
             self.field.name = form_data["field_name"]
             self.field.type_ = form_data["type_"]
             self.field.required = bool(form_data.get("required"))
+            self.field.bundled = bool(form_data.get("bundled"))
             self.field.debriefing = bool(form_data.get("debriefing"))
 
         if "custom_system_message" in form_data:
@@ -334,6 +344,53 @@ class FieldEditorState(AppState):
             session.commit()
             session.refresh(self.field)
 
+    def set_bundle_item(self, index: int, key: str, value: str):
+        if not self._user_has_access():
+            return
+        with rx.session() as session:
+            session.add(self.field)
+            if self.field.id is None:
+                session.commit()
+                session.refresh(self.field)
+            item = self.field.bundle_items[index]
+            item.field_id = self.field.id
+            setattr(item, key, value)
+            session.add(item)
+            session.commit()
+            session.refresh(self.field)
+
+    def add_bundle_item(self):
+        if not self._user_has_access():
+            return
+        with rx.session() as session:
+            session.add(self.field)
+            if not self.field.id:
+                session.commit()
+                session.refresh(self.field)
+            next_ordering = (
+                max((item.ordering for item in self.field.bundle_items), default=0.0)
+                + 1.0
+            )
+            item = BundleItem(field_id=self.field.id, ordering=next_ordering)
+            self.field.bundle_items.append(item)
+            session.add(item)
+            session.add(self.field)
+            session.commit()
+            session.refresh(self.field)
+            return utils.focus_input_in_class("fd-BundleItem-Label")
+
+    def delete_bundle_item(self, index: int):
+        if not self._user_has_access():
+            return
+        with rx.session() as session:
+            session.add(self.field)
+            item_to_delete = session.get(BundleItem, self.field.bundle_items[index].id)
+            if item_to_delete is not None:
+                session.delete(item_to_delete)
+            del self.field.bundle_items[index]
+            session.commit()
+            session.refresh(self.field)
+
     def open_new_static_field(self):
         """Create a new static field and open the editor modal."""
         self.field = Field(form_id=self.form_id)
@@ -344,6 +401,10 @@ class FieldEditorState(AppState):
         """Update the 'Required' field only if 'Debriefing' is not selected."""
         if not self.field.debriefing:
             self.field.required = is_checked
+
+    def handle_bundled_change(self, is_checked: bool):
+        """Toggle whether the selected answer format is repeated over row items."""
+        self.field.bundled = is_checked
 
     def handle_debriefing_change(self, is_checked: bool):
         """Update 'Debriefing' and enforce 'Required' when 'Debriefing' is checked."""
@@ -382,6 +443,14 @@ def field_is_scale_cond(content: rx.Component) -> rx.Component:
     )
 
 
+def field_is_bundle_cond(content: rx.Component) -> rx.Component:
+    return rx.cond(
+        FieldEditorState.field.bundled,
+        content,
+        rx.fragment(),
+    )
+
+
 def option_editor(option: Option, index: int):
     return rx.card(
         rx.hstack(
@@ -405,6 +474,41 @@ def option_editor(option: Option, index: int):
             rx.button(
                 rx.icon(tag="x"),
                 on_click=FieldEditorState.delete_option(index),
+                type="button",
+                color_scheme="tomato",
+            ),
+            align="end",
+        ),
+    )
+
+
+def bundle_item_editor(item: BundleItem, index: int):
+    return rx.card(
+        rx.hstack(
+            rx.el.label(
+                rx.text("Label"),
+                rx.input(
+                    placeholder="Subquestion label",
+                    class_name="fd-BundleItem-Label",
+                    value=item.label,
+                    on_change=lambda v: FieldEditorState.set_bundle_item(
+                        index, "label", v
+                    ),
+                ),
+            ),
+            rx.el.label(
+                rx.text("Value"),
+                rx.input(
+                    placeholder=rx.cond(item.label != "", item.label, "Value"),
+                    value=item.value,
+                    on_change=lambda v: FieldEditorState.set_bundle_item(
+                        index, "value", v
+                    ),
+                ),
+            ),
+            rx.button(
+                rx.icon(tag="x"),
+                on_click=FieldEditorState.delete_bundle_item(index),
                 type="button",
                 color_scheme="tomato",
             ),
@@ -451,6 +555,42 @@ def field_editor_input_prompt(key: str):
             ),
         ),
         width="100%",
+    )
+
+
+def scale_range_editor(width="100%") -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.text("Scale Range", weight="bold"),
+            rx.tooltip(
+                rx.icon("info", size=16),
+                content="Choose the lowest and highest numbers the slider can take.",
+            ),
+            align="center",
+        ),
+        rx.hstack(
+            rx.vstack(
+                rx.text("Minimum", size="sm"),
+                rx.input(
+                    type="number",
+                    value=FieldEditorState.field.scale_min.to(str),
+                    on_change=FieldEditorState.update_scale_min,
+                    width="6em",
+                ),
+            ),
+            rx.vstack(
+                rx.text("Maximum", size="sm"),
+                rx.input(
+                    type="number",
+                    value=FieldEditorState.field.scale_max.to(str),
+                    on_change=FieldEditorState.update_scale_max,
+                    width="6em",
+                ),
+            ),
+            spacing="4",
+        ),
+        width=width,
+        align="start",
     )
 
 
@@ -564,6 +704,19 @@ def field_editor():
                                         size="1",
                                         color="gray",
                                     ),
+                                ),
+                                align="center",
+                            ),
+                            rx.hstack(
+                                rx.checkbox(
+                                    "Bundled Question",
+                                    name="bundled",
+                                    checked=FieldEditorState.field.bundled,
+                                    on_change=FieldEditorState.handle_bundled_change,
+                                ),
+                                rx.tooltip(
+                                    rx.icon("info", size=16),
+                                    content=tooltips["bundled"],
                                 ),
                                 align="center",
                             ),
@@ -684,41 +837,41 @@ def field_editor():
                     align="start",
                 ),
             ),
-            field_is_scale_cond(
+            field_is_bundle_cond(
                 rx.vstack(
                     rx.hstack(
-                        rx.text("Scale Range", weight="bold"),
+                        rx.text("Bundled Items", weight="bold"),
                         rx.tooltip(
                             rx.icon("info", size=16),
-                            content="Choose the lowest and highest numbers the slider can take.",
+                            content=tooltips["bundle_items"],
                         ),
                         align="center",
                     ),
+                    rx.scroll_area(
+                        rx.vstack(
+                            rx.foreach(
+                                FieldEditorState.field.bundle_items,
+                                bundle_item_editor,
+                            ),
+                        ),
+                        max_height="200px",
+                    ),
                     rx.hstack(
-                        rx.vstack(
-                            rx.text("Minimum", size="sm"),
-                            rx.input(
-                                type="number",
-                                value=FieldEditorState.field.scale_min.to(str),
-                                on_change=FieldEditorState.update_scale_min,
-                                width="6em",
-                            ),
+                        rx.button(
+                            rx.icon("plus", size=16),
+                            rx.text("Add Item"),
+                            on_click=FieldEditorState.add_bundle_item,
+                            type="button",
+                            variant="outline",
+                            size="sm",
                         ),
-                        rx.vstack(
-                            rx.text("Maximum", size="sm"),
-                            rx.input(
-                                type="number",
-                                value=FieldEditorState.field.scale_max.to(str),
-                                on_change=FieldEditorState.update_scale_max,
-                                width="6em",
-                            ),
-                        ),
-                        spacing="4",
+                        justify="start",
                     ),
                     width=third_or_half(),
                     align="start",
                 ),
             ),
+            field_is_scale_cond(scale_range_editor(third_or_half())),
             rx.cond(
                 FieldEditorState.show_prompt_editor,
                 rx.card(
@@ -776,6 +929,8 @@ def field_editor():
                             Please use the following special tokens:
                             - **{{ question }}**: This will be replaced by the question text.
                             - **{{ response }}**: This will be replaced by the user response to the question.
+                            - **{{ subquestions_text }}**: For bundled questions, this is the list of subquestions and their answers.
+                            - **{{ subquestions }}**: For bundled questions, this is a structured list with `label`, `value`, and `response`.
                             - **{{ end_of_survey_token }}**: This must be generated by the LLM to finish.
                             """,
                             custom_styles={

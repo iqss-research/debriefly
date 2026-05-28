@@ -1,5 +1,5 @@
 import reflex as rx
-from debriefly.reflex.backend.models import Field, FieldType, Option
+from debriefly.reflex.backend.models import BundleItem, Field, FieldType, Option
 from typing import Any
 
 
@@ -25,13 +25,14 @@ def option_value_label_id(option: Option) -> rx.Component:
 def foreach_field_options(
     options: list[Option], component: OptionItemCallable
 ) -> rx.Component:
-    return rx.foreach(
-        options,
-        lambda option: component(
+    def render_option(option: Option) -> rx.Component:
+        return component(
             option.label,
             value=option_value_label_id(option),
-        ),
-    )
+        )
+
+    typed_options = rx.Var.create_safe(options, _var_is_string=False).to(list[Option])
+    return rx.foreach(typed_options, render_option)
 
 
 def radio_item(*children: rx.Component, value: rx.Var[str], **props) -> rx.Component:
@@ -69,11 +70,14 @@ def checkbox_item(field: Field, option: Option):
 
 
 def field_checkbox(field: Field) -> rx.Component:
+    def render_option(option: Option) -> rx.Component:
+        return checkbox_item(field, option)
+
     return rx.cond(
         field.options,
         rx.foreach(
-            field.options,
-            lambda option: checkbox_item(field, option),
+            rx.Var.create_safe(field.options, _var_is_string=False).to(list[Option]),
+            render_option,
         ),
         rx.text("No options defined"),
     )
@@ -132,7 +136,149 @@ def field_scale(field: Field) -> rx.Component:
     )
 
 
-def field_input(field: Field, editing: bool = False):
+def bundle_field_input_name(field: Field, item: BundleItem) -> str:
+    return f"{field.name}___{item.id}"
+
+
+def bundle_option_input_name(field: Field, item: BundleItem, option: Option) -> str:
+    return f"{field.name}___{item.id}___{option.id}"
+
+
+def bundle_radio_item(field: Field, item: BundleItem, option: Option) -> rx.Component:
+    return radio_item(option.label, value=option_value_label_id(option))
+
+
+def bundle_checkbox_item(
+    field: Field, item: BundleItem, option: Option
+) -> rx.Component:
+    return rx.box(
+        rx.checkbox(
+            option.label,
+            value=option_value_label_id(option),
+            name=bundle_option_input_name(field, item, option),
+        ),
+        margin_right="2em",
+    )
+
+
+def bundle_radio(field: Field, item: BundleItem, editing: bool = False) -> rx.Component:
+    def render_option(option: Option) -> rx.Component:
+        return bundle_radio_item(field, item, option)
+
+    return rx.cond(
+        field.options,
+        rx.radio.root(
+            rx.vstack(
+                rx.foreach(
+                    rx.Var.create_safe(field.options, _var_is_string=False).to(
+                        list[Option]
+                    ),
+                    render_option,
+                ),
+                align="start",
+            ),
+            name=bundle_field_input_name(field, item),
+            required=rx.cond(editing, False, field.required),
+        ),
+        rx.text("No options defined"),
+    )
+
+
+def bundle_checkbox(field: Field, item: BundleItem) -> rx.Component:
+    def render_option(option: Option) -> rx.Component:
+        return bundle_checkbox_item(field, item, option)
+
+    return rx.cond(
+        field.options,
+        rx.foreach(
+            rx.Var.create_safe(field.options, _var_is_string=False).to(list[Option]),
+            render_option,
+        ),
+        rx.text("No options defined"),
+    )
+
+
+def bundle_scale(field: Field, item: BundleItem) -> rx.Component:
+    return rx.vstack(
+        rx.slider(
+            name=bundle_field_input_name(field, item),
+            default_value=field.scale_min,
+            min=field.scale_min,
+            max=field.scale_max,
+            step=1,
+            width="100%",
+        ),
+        rx.hstack(
+            rx.text(field.scale_min, size="1"),
+            rx.spacer(),
+            rx.text(field.scale_max, size="1"),
+            width="100%",
+        ),
+        spacing="2",
+        width="100%",
+    )
+
+
+def bundle_item_input(
+    field: Field, item: BundleItem, editing: bool = False
+) -> rx.Component:
+    name = bundle_field_input_name(field, item)
+    return rx.match(
+        field.type_,
+        (FieldType.checkbox.value, bundle_checkbox(field, item)),
+        (FieldType.radio.value, bundle_radio(field, item, editing=editing)),
+        (
+            FieldType.textarea.value,
+            rx.text_area(
+                placeholder=field.prompt,
+                name=name,
+                required=rx.cond(editing, False, field.required),
+            ),
+        ),
+        (FieldType.scale.value, bundle_scale(field, item)),
+        rx.input(
+            placeholder=field.prompt,
+            type=field.type_.to(str),
+            name=name,
+            aria_label=name,
+            required=rx.cond(editing, False, field.required),
+        ),
+    )
+
+
+def bundle_item_view(
+    field: Field, item: BundleItem, editing: bool = False
+) -> rx.Component:
+    return rx.vstack(
+        rx.text(item.label, weight="medium"),
+        bundle_item_input(field, item, editing=editing),
+        spacing="2",
+        width="100%",
+        align="start",
+    )
+
+
+def field_bundle(field: Field, editing: bool = False) -> rx.Component:
+    def render_item(item: BundleItem) -> rx.Component:
+        return bundle_item_view(field, item, editing=editing)
+
+    return rx.cond(
+        field.bundle_items,
+        rx.vstack(
+            rx.foreach(
+                rx.Var.create_safe(field.bundle_items, _var_is_string=False).to(
+                    list[BundleItem]
+                ),
+                render_item,
+            ),
+            spacing="4",
+            width="100%",
+        ),
+        rx.text("No bundled items defined"),
+    )
+
+
+def field_single_input(field: Field, editing: bool = False):
     return rx.match(
         field.type_,
         (FieldType.checkbox.value, field_checkbox(field)),
@@ -154,6 +300,14 @@ def field_input(field: Field, editing: bool = False):
             aria_label=field.name,
             required=field.required,
         ),
+    )
+
+
+def field_input(field: Field, editing: bool = False):
+    return rx.cond(
+        field.bundled,
+        field_bundle(field, editing=editing),
+        field_single_input(field, editing=editing),
     )
 
 

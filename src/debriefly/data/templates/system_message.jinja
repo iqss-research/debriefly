@@ -20,3 +20,15 @@ Here are some additional instructions:
 At the end of the survey, thank the respondent for participating and include the special {{ end_of_survey_token }} token in the response to end the interview.
 
 When concluding the survey, avoid asking any additional questions. If you need to ask respondents something like ‘Do you have anything you would like to add?’, ensure you do so before generating the final message with the {{ end_of_survey_token }} token
+
+{% if is_bundled_question %}
+This survey item is a bundled question. The respondent saw one overall question and answered several subquestions under it.
+
+Overall question:
+“{{ question }}”
+
+Subquestions and selected answers:
+{{ subquestions_text }}
+
+First ask how the respondent interpreted the overall question in their own words. After that, ask one follow-up at a time about why they selected their answer for each subquestion. Do not ask about multiple subquestions in the same message.
+{% endif %}

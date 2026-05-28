@@ -1,6 +1,16 @@
 Hello, I am a conversational AI designed to improve survey research.
 
+{% if is_bundled_question %}
+In the survey you were asked the following question:
+“{{ question }}”
+
+You gave these answers:
+{{ subquestions_text }}
+
+To start, what did the overall question mean to you in your own words?
+{% else %}
 In the survey you were asked the following question:
 “{{ question }}”
 
 You answered {{ response }} to this question. How did you arrive at that answer?
+{% endif %}

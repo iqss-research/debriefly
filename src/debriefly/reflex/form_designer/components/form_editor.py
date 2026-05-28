@@ -6,8 +6,12 @@ from debriefly.reflex.form_designer.components.field_view import (
     field_input,
     field_prompt,
 )
-from debriefly.reflex.backend.models import FieldType, Field, Form, Option
+from debriefly.reflex.backend.models import BundleItem, FieldType, Field, Form, Option
 from debriefly.reflex.form_designer.components.form_select import FormSelectState
+
+
+def field_type_value(field: Field) -> str:
+    return field.type_.value if isinstance(field.type_, FieldType) else str(field.type_)
 
 
 class FormEditorState(AppState):
@@ -88,6 +92,7 @@ class FormEditorState(AppState):
         if not self._user_has_access():
             return
         field.pop("options", None)  # Remove options, relationship
+        field.pop("bundle_items", None)  # Remove relationship
         field = Field(**field)
         with rx.session() as session:
             session.add(self.form)
@@ -105,7 +110,9 @@ class FormEditorState(AppState):
                         existing_field.name = field.name
                         existing_field.type_ = field.type_
                         existing_field.required = field.required
+                        existing_field.bundled = field.bundled
                         existing_field.debriefing = field.debriefing
+                        existing_field.allow_back = field.allow_back
                         existing_field.prompt = field.prompt
                         existing_field.custom_system_message = (
                             field.custom_system_message
@@ -148,6 +155,7 @@ class FormEditorState(AppState):
                 type_=FieldType(field_type),
                 prompt="",
                 form_id=form.id,
+                allow_back=False,
                 ordering=self._next_field_ordering(form.fields),
             )
 
@@ -239,13 +247,17 @@ class FormEditorState(AppState):
                     name=field.name,
                     type_=field.type_,
                     required=field.required,
+                    bundled=field.bundled,
                     debriefing=field.debriefing,
+                    allow_back=field.allow_back,
                     min_debriefing_time=field.min_debriefing_time,
                     max_debriefing_time=field.max_debriefing_time,
                     prompt=field.prompt,
                     ordering=float(ordering),
                     scale_min=field.scale_min,
                     scale_max=field.scale_max,
+                    custom_system_message=field.custom_system_message,
+                    custom_initial_message=field.custom_initial_message,
                     form_id=new_form.id,
                 )
                 session.add(new_field)
@@ -259,6 +271,15 @@ class FormEditorState(AppState):
                         field_id=new_field.id,  # new_field.id is now set
                     )
                     session.add(new_option)
+
+                for item in field.bundle_items:
+                    new_item = BundleItem(
+                        label=item.label,
+                        value=item.value,
+                        ordering=item.ordering,
+                        field_id=new_field.id,
+                    )
+                    session.add(new_item)
 
             session.commit()  # Commit all changes at once
 
@@ -276,6 +297,25 @@ class FormEditorState(AppState):
             session.commit()
             session.refresh(self.form)
             self.show_submission_code = value  # Sync the state variable
+
+    def set_page_break_allow_back(self, field_id: int, value: bool):
+        """Update whether respondents may go back across a page break."""
+        if not self._user_has_access():
+            return
+
+        with rx.session() as session:
+            field = session.get(Field, field_id)
+            if (
+                field is None
+                or field.form_id != self.form.id
+                or field_type_value(field) != FieldType.pagebreak.value
+            ):
+                return
+
+            field.allow_back = value
+            session.add(field)
+            session.commit()
+            return FormEditorState.load_form_by_id(self.form.id)
 
 
 def field_edit_view(field: Field):
@@ -351,8 +391,30 @@ def field_edit_view(field: Field):
                 field_input(field, editing=True),
                 flex_wrap="wrap",
             ),
-            rx.text(rx.cond(field.required, "(required)", ""), size="1", ml="3"),
-            rx.text(rx.cond(field.debriefing, "(debriefing)", ""), size="1", ml="3"),
+            rx.cond(
+                field.type_ == FieldType.pagebreak.value,
+                rx.hstack(
+                    rx.checkbox(
+                        "Allow respondents to go back",
+                        checked=field.allow_back,
+                        on_change=lambda checked: FormEditorState.set_page_break_allow_back(
+                            field.id, checked
+                        ),
+                    ),
+                    rx.tooltip(
+                        rx.icon("info", size=16),
+                        content="Shows a Back button on the next survey page. Debriefing chat stays forward-only.",
+                    ),
+                    align="center",
+                    spacing="2",
+                ),
+                rx.hstack(
+                    rx.text(rx.cond(field.required, "(required)", ""), size="1"),
+                    rx.text(rx.cond(field.bundled, "(bundled)", ""), size="1"),
+                    rx.text(rx.cond(field.debriefing, "(debriefing)", ""), size="1"),
+                    spacing="2",
+                ),
+            ),
             justify="between",
         ),
     )

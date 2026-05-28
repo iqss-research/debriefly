@@ -18,6 +18,32 @@ message_style = dict(
 )
 
 
+def bundle_item_key(item) -> str:
+    return str(item.value or item.label or item.id)
+
+
+def bundle_answer_map(raw_value: str) -> dict[str, str]:
+    try:
+        answers = json.loads(raw_value)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+    if isinstance(answers, dict):
+        return {str(key): str(value) for key, value in answers.items()}
+    if not isinstance(answers, list):
+        return {}
+
+    mapped = {}
+    for answer in answers:
+        if not isinstance(answer, dict):
+            continue
+        value = answer.get("value")
+        response = answer.get("response")
+        if value is not None and response is not None:
+            mapped[str(value)] = str(response)
+    return mapped
+
+
 class ResponsesState(AppState):
     form: Form = Form()
     responses: list[Response] = []
@@ -119,7 +145,11 @@ class ResponsesState(AppState):
             "Client Token",
         ]
         for field in fields:
-            header.append(field.name)
+            if field.bundled:
+                for item in field.bundle_items:
+                    header.append(f"{field.name}_{item.label or item.value or item.id}")
+            else:
+                header.append(field.name)
             if field.debriefing:
                 header.append(f"{field.name}_debriefing")
 
@@ -138,11 +168,19 @@ class ResponsesState(AppState):
                     ]
 
                     if len(field_value) == 0:
-                        row.append("")
+                        if field.bundled:
+                            row.extend([""] * len(field.bundle_items))
+                        else:
+                            row.append("")
                         if field.debriefing:
                             row.append("")
                     else:
-                        row.append(field_value[0].value)
+                        if field.bundled:
+                            answers = bundle_answer_map(field_value[0].value)
+                            for item in field.bundle_items:
+                                row.append(answers.get(bundle_item_key(item), ""))
+                        else:
+                            row.append(field_value[0].value)
                         if field.debriefing:
                             row.append(field_value[0].debriefing)
 

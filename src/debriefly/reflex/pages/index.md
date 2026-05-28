@@ -46,7 +46,7 @@ In the survey editor, click **Add Question**. In the question editor:
 1. Add a **Question Identifier**. This is for your records and is not shown to respondents.
 2. Add the **Question Text** respondents should see.
 3. Choose the **Answer Format**.
-4. Add answer options if you choose **Radio Buttons** or **Checkboxes**.
+4. Add answer options if you choose **Radio Buttons** or **Checkboxes**. If the same answer format should be repeated across subquestions, check **Bundled Question** and add each row item, such as “Bank” or “Government.”
 5. Check **Required** if respondents must answer the question.
 6. Check **Debriefing** if Debriefly should ask follow-up questions about this item.
 7. Click **Save**.
