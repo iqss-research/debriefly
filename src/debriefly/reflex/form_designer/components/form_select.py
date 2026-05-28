@@ -6,35 +6,86 @@ from sqlmodel import select
 import asyncio
 
 
+class FormSelectOption(rx.Base):
+    form_id: str
+    name: str
+
+
 class FormSelectState(MainState):
-    forms: list[Form] = []
+    forms: list[FormSelectOption] = []
+    forms_loading: bool = False
+    forms_loaded_for_user_id: str = ""
 
     async def load_forms(self):
-        if not self.user_id:
-            await asyncio.sleep(0.25)
-            return FormSelectState.load_forms()
-        with rx.session() as s:
-            self.forms = list(s.exec(select(Form).where(Form.user_id == self.user_id)))
+        if self.forms_loading:
+            return
+
+        user_ready = False
+        for _ in range(10):
+            if await self.sync_user_from_clerk():
+                user_ready = True
+                break
+            await asyncio.sleep(0.05)
+
+        if not user_ready:
+            yield FormSelectState.load_forms
+            return
+
+        if self.forms_loaded_for_user_id == self.user_id:
+            return
+
+        self.forms_loading = True
+        yield
+
+        try:
+            with rx.session() as s:
+                rows = s.exec(
+                    select(Form.id, Form.name).where(Form.user_id == self.user_id)
+                )
+                self.forms = [
+                    FormSelectOption(form_id=str(form_id), name=name)
+                    for form_id, name in rows
+                ]
+                self.forms_loaded_for_user_id = self.user_id
+        finally:
+            self.forms_loading = False
+
+    def refresh_forms(self):
+        self.forms_loaded_for_user_id = ""
+        yield FormSelectState.load_forms
 
     def on_select_change(self, value: str):
+        if value == "__loading":
+            return
         if value == "":
             return rx.redirect(routes.FORM_EDIT_NEW)
         return rx.redirect(routes.edit_form(value))
 
 
-def form_name(form: Form):
+def form_name(form: FormSelectOption):
     return form.name
 
 
 def form_select():
     return rx.box(
         rx.select.root(
-            rx.select.trigger(placeholder="Select Survey", width="100%"),
+            rx.select.trigger(
+                placeholder=rx.cond(
+                    FormSelectState.forms_loading,
+                    "Loading surveys...",
+                    "Select Survey",
+                ),
+                width="100%",
+            ),
             rx.select.content(
-                rx.foreach(
-                    FormSelectState.forms,
-                    lambda form: rx.select.item(
-                        form_name(form), value=form.id.to_string()
+                rx.cond(
+                    FormSelectState.forms_loading,
+                    rx.select.item("Loading surveys...", value="__loading"),
+                    rx.foreach(
+                        FormSelectState.forms,
+                        lambda form: rx.select.item(
+                            form_name(form), value=form.form_id
+                        ),
                     ),
                 ),
             ),

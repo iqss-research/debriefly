@@ -1,6 +1,7 @@
 import reflex as rx
 import reflex_clerk as clerk
 from datetime import datetime, timezone
+from debriefly.reflex.auth import AUTH_FALLBACK_ROUTE, SIGN_IN_ROUTE
 from debriefly.reflex.backend.backend import MainState
 
 import logging
@@ -69,5 +70,8 @@ def consent() -> rx.Component:
     )
 
     return clerk.clerk_provider(
-        clerk.protect(content, fallback=clerk.redirect_to_sign_in())
+        clerk.protect(content, fallback=clerk.redirect_to_sign_in()),
+        sign_in_url=SIGN_IN_ROUTE,
+        sign_in_fallback_redirect_url=AUTH_FALLBACK_ROUTE,
+        sign_up_fallback_redirect_url=AUTH_FALLBACK_ROUTE,
     )

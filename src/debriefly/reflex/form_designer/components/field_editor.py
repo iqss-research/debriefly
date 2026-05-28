@@ -2,7 +2,12 @@
 import reflex as rx
 from pathlib import Path
 from debriefly.reflex.form_designer import constants, routes, utils
-from debriefly.reflex.backend.models import Field, FieldType, Option
+from debriefly.reflex.backend.models import (
+    Field,
+    FieldType,
+    Option,
+    UserOpenAISettings,
+)
 from debriefly.reflex.backend.backend import MainState as AppState
 from debriefly.reflex.form_designer.components.form_editor import FormEditorState
 from debriefly.openai import check_prompt_compliance, PromptVerdict
@@ -162,9 +167,19 @@ class FieldEditorState(AppState):
         # check system prompt
         sys_prompt = form_data.get("custom_system_message", "").strip()
         init_msg = form_data.get("custom_initial_message", "").strip()
+        is_debriefing = bool(form_data.get("debriefing")) or self.field.debriefing
 
         # run compliance checks (only on non-empty edits) only if debriefing is checked
-        if self.field.debriefing:
+        if is_debriefing:
+            with rx.session() as session:
+                settings = UserOpenAISettings.get_for_user(session, self.user_id)
+
+            if settings is None or not settings.is_configured:
+                self.error = (
+                    "Add your OpenAI API key before saving debriefing questions."
+                )
+                return
+
             for which, txt in {
                 "system prompt": sys_prompt,
                 "initial message": init_msg,
@@ -172,13 +187,17 @@ class FieldEditorState(AppState):
                 if not txt:
                     continue
 
-                verdict = check_prompt_compliance(
-                    txt,
-                    api_key=self.config["AZURE_OPENAI_API_KEY"],
-                    api_version=self.config["AZURE_OPENAI_API_VERSION"],
-                    api_endpoint=self.config["AZURE_OPENAI_ENDPOINT"],
-                    api_model=self.config["AZURE_OPENAI_DEPLOYMENT_MODEL"],
-                )
+                try:
+                    verdict = check_prompt_compliance(
+                        txt,
+                        api_key=settings.api_key,
+                        api_model=settings.model,
+                    )
+                except Exception:
+                    self.error = (
+                        "Could not validate the prompt with your OpenAI API key."
+                    )
+                    return
 
                 if verdict == PromptVerdict.REJECT:
                     self.error = f"{which.title()} rejected. Your prompt must be about cognitive debriefing."

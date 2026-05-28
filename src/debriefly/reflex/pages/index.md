@@ -1,42 +1,95 @@
-# Debriefly: A Tool for Improving Survey Questions via Automated Cognitive Debriefing
-Debriefly enables researchers to quickly improve survey question wording – ensuring that survey respondents use the same interpretations of survey questions as researchers intend. Debriefly does this by automating the venerable “cognitive debriefing” procedure, which involves administering the survey as usual and then having a detailed conversation with the respondent about the meaning of each question and answer.  Unfortunately, this expensive and time consuming process, although widely recognized as an essential part of survey construction, is infrequently used, leaving many survey data collections with dubious value. Debriefly solves this problem for researchers by engaging respondents in an automated conversational interface powered by a specially modified large language model (LLM). Debriefly implements methods described in our paper (Hinck, Ilavarasan, King, Nakamura, & Stewart, in progress).
+# Debriefly
 
-## Quick Start Guide
-### Creating Surveys with Automated Cognitive Debriefing
-1. Sign In: create a Debriefly account or log in.
-2. Access the Surveys Section:
-   - Click "Surveys" in the menu on the left-hand side of the page.
-3. Create a New Survey:
-   - Enter your desired survey name in the "Survey Name" box.
-   - Click the "New Survey" button located above the input field.
-4. Select an Existing Survey (Optional):
-   - If you need to revisit a survey you’ve already created, choose it from the "Existing Survey" dropdown menu.
-5. Add a Question:
-   - Click the "Add Question" button.
-   - In the "Edit Question" box, customize the question details as needed.
-   - Important: Specify the order of the question within the survey. If omitted, questions will appear in reverse order of creation.
-   - Click "Save" to confirm your question.
-6. Distribute Your Survey:
-   - Click the "Copy URL" button at the top of the page to generate a shareable link.
-   - Note: Do not copy the URL directly from the browser’s address bar.
-7. Access Survey Responses:
-   - Responses are available by clicking the "Responses" button at the top of the survey page.
+Debriefly helps researchers improve survey questions by checking whether respondents understand each question the way the researcher intended.
 
-### Analyzing Conversation Transcripts
-Once your survey is live and responses have been collected, you can analyze the conversation transcripts by following these steps:
-1. Sign In: Log into your account.
-2. Access the Surveys Section:
-   - Click "Surveys" in the menu on the left-hand side.
-3. Select Your Survey:
-   - Choose the survey for which you want to view responses.
-4. View Responses:
-   - Click the "Responses" button to see individual conversation transcripts.
-5. Download Transcripts:
-   - Click the "Download" button at the top of the page to save the results locally.
-6. Analyze with LLM:
-   - Click the "Play" button to initiate the LLM-powered analysis.
-   - Ask questions about the survey transcripts.
-   - The LLM will search through the entire transcript and provide answers based on the conversation data.
+With Debriefly, a respondent answers your survey question and then has a short, guided conversation about what the question meant to them. Those debriefing chats can reveal confusing wording, unexpected interpretations, missing answer choices, and other issues before you rely on the data.
+
+## Quick Start
+
+### 1. Sign in
+
+Use **Sign In** or **Sign Up** in the lower-left corner of the sidebar. Debriefly saves surveys to your account, so you need to be signed in before creating or editing a survey.
+
+### 2. Add your OpenAI key
+
+Open **OpenAI Key** in the sidebar, enter your OpenAI API key, enter a model name or keep the default, and click **Save**.
+
+You can create ordinary survey questions without a key, but you need a saved OpenAI key before you can save questions that use automated cognitive debriefing.
+
+Debriefly uses your key to run the debriefing chats for surveys you own. The key is different from a ChatGPT login or ChatGPT subscription.
+
+To get an OpenAI API key:
+
+1. Go to the [OpenAI API keys page](https://platform.openai.com/api-keys).
+2. Sign in to your OpenAI account, or create one if you do not have one.
+3. Set up API billing or credits if OpenAI asks you to do so. API usage is billed separately from ChatGPT subscriptions.
+4. Create a new secret key.
+5. Copy the key right away. OpenAI only shows the full secret key when it is created.
+6. Return to Debriefly, open **OpenAI Key**, paste the key, and click **Save**.
+
+Treat your API key like a password. Do not share it publicly, send it to respondents, or paste it into documents that others can access. If you lose the key or think it has been exposed, create a new key in OpenAI and remove the old one.
+
+### 3. Create a survey
+
+In the **Create Survey** section of the sidebar:
+
+1. Enter a survey name.
+2. Click **New Survey**.
+3. Debriefly opens the survey editor.
+
+To return to a survey later, choose it from **Existing Surveys** in the sidebar.
+
+### 4. Add questions
+
+In the survey editor, click **Add Question**. In the question editor:
+
+1. Add a **Question Identifier**. This is for your records and is not shown to respondents.
+2. Add the **Question Text** respondents should see.
+3. Choose the **Answer Format**.
+4. Add answer options if you choose **Radio Buttons** or **Checkboxes**.
+5. Check **Required** if respondents must answer the question.
+6. Check **Debriefing** if Debriefly should ask follow-up questions about this item.
+7. Click **Save**.
+
+Debriefing questions are automatically treated as required, because the chat needs the respondent's answer before it can begin.
+
+### 5. Review the survey before sharing
+
+Use these controls at the top of the survey editor:
+
+- **Preview** opens the respondent view without saving a test response.
+- **Copy URL** copies the participant link. Share this copied link with respondents.
+- **View Results** opens submitted responses.
+- **Copy Survey** duplicates the current survey so you can make a new version without changing the original.
+
+Use the up and down arrows on each question to reorder it. You can also add **Page Break** or **Plain Text** blocks when the survey needs separate pages or instructions.
+
+### 6. Share the participant link
+
+Click **Copy URL** and send that link to respondents. Do not copy the browser address bar from the editor; that is the private editing page, not the participant survey link.
+
+### 7. Review responses
+
+After respondents complete the survey:
+
+1. Select the survey from **Existing Surveys**.
+2. Click **View Results**.
+3. Expand a response to see answers and debriefing transcripts.
+4. Click **Download Results** to export a CSV file with answers and metadata.
+5. Click **Download Chats** to export all debriefing transcripts as a text file.
+
+The chat transcript file is designed for qualitative review. You can read it directly or paste it into an LLM, such as ChatGPT, to summarize recurring misunderstandings and identify questions that need revision.
+
+## Suggested Workflow
+
+1. Draft a short survey.
+2. Mark the most important or most uncertain questions for debriefing.
+3. Preview the survey yourself.
+4. Share the copied participant link with a small pilot group.
+5. Review the downloaded results and chats.
+6. Revise question wording, answer choices, or instructions.
+7. Repeat until respondents interpret the questions as intended.
 
 ## Reference
-Hinck, Musashi, Ilavarasan, Uma, King, Gary., Nakamura, Kentaro, & Stewart, Brandon M. (2025). Automated Cognitive Debriefing
+
+Hinck, Musashi, King, Gary, Nakamura, Kentaro, & Stewart, Brandon M. (2026). Where's the Evidence that Respondents Understand Your Survey Questions?

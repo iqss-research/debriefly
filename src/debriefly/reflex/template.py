@@ -1,6 +1,7 @@
 import reflex as rx
 import reflex_clerk as clerk
 from debriefly.reflex import styles
+from debriefly.reflex.auth import AUTH_FALLBACK_ROUTE, SIGN_IN_ROUTE
 from debriefly.reflex.components.sidebar import sidebar
 
 
@@ -40,6 +41,9 @@ def template(page_content) -> rx.Component:
                 ),
                 fallback=clerk.redirect_to_sign_in(),
             ),
+            sign_in_url=SIGN_IN_ROUTE,
+            sign_in_fallback_redirect_url=AUTH_FALLBACK_ROUTE,
+            sign_up_fallback_redirect_url=AUTH_FALLBACK_ROUTE,
         ),
         appearance="light",
         has_background=True,

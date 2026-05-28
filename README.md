@@ -88,7 +88,9 @@ If you're comfortable with setting up a new project on [Clerk](https://www.clerk
 
 3. Navigate to [http://localhost:3000](http://localhost:3000) in your browser to see the application running.
 
-4. Modifying the code will automatically reload the application in the browser. As a trivial example, on the `Surveys` page (which should be available at [http://localhost:3000/edit/form](http://localhost:3000/edit/form),
+4. After signing in, open **OpenAI Key** in the sidebar and save your standard OpenAI API key. Debriefly uses the survey owner's key for debriefing chats; Azure OpenAI keys are no longer configured globally.
+
+5. Modifying the code will automatically reload the application in the browser. As a trivial example, on the `Surveys` page (which should be available at [http://localhost:3000/edit/form](http://localhost:3000/edit/form),
 lets try to change the title of the button from `New Survey` to `New Survey!`.
 
    Modify the file `src/debriefly/reflex/form_designer/pages/form_editor.py` to change the following code that renders a button. Do this in a separate terminal window from where you ran `./debriefly` before, so that we don't kill the running web application.

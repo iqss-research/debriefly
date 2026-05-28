@@ -204,10 +204,7 @@ def sidebar() -> rx.Component:
                 width="100%",  # Ensure full width
             ),
             sidebar_item("Feedback", "/feedback", "message_square"),
-            clerk.protect(
-                sidebar_item("Config", "/config", "cog"),
-                permission="org:app:admin",
-            ),
+            sidebar_item("OpenAI Key", "/user", "key"),
             rx.spacer(),
             rx.divider(),
             info_footer(),
@@ -246,7 +243,7 @@ class SidebarState(MainState):
                 session.add(new_form)
                 session.commit()
                 session.refresh(new_form)
-            yield FormSelectState.load_forms
+            yield FormSelectState.refresh_forms
             yield rx.redirect(routes.edit_form(new_form.id))
             self.new_survey_name = ""
 
@@ -256,4 +253,4 @@ class SidebarState(MainState):
             if form and form.user_id == self.user_id:
                 session.delete(form)
                 session.commit()
-            yield FormSelectState.load_forms
+            yield FormSelectState.refresh_forms

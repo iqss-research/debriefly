@@ -17,7 +17,10 @@ def config() -> rx.Component:
                         rx.heading("Global Configuration", size="5"),
                         align="center",
                     ),
-                    rx.text("Update App-level Configuration.", size="3"),
+                    rx.text(
+                        "Deprecated: OpenAI API keys are now configured per user.",
+                        size="3",
+                    ),
                     width="100%",
                 ),
                 rx.form.root(

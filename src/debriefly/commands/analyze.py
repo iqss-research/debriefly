@@ -1,7 +1,6 @@
-import time
 import logging
 from debriefly.qualtrics import QualtricsSession, QualtricsSurvey
-from debriefly.openai import AzureOpenAISearch
+from debriefly.openai import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -13,33 +12,47 @@ def add_args(parser):
         "--wait-time",
         type=int,
         default=20,
-        help="Wait time in seconds before searching the index. Default %(default)s",
+        help="Deprecated legacy Azure index wait time. Ignored.",
     )
     parser.add_argument(
         "--auto-delete",
         action="store_true",
-        help="Auto delete the created Azure OpenAI Index after the search.",
+        help="Deprecated legacy Azure index cleanup flag. Ignored.",
     )
     return parser
 
 
 def analyze(survey_id, query, auto_delete=False, wait_time=20):
 
-    index_name = AzureOpenAISearch.survey_id_to_index_name(survey_id)
-    client = AzureOpenAISearch(index_name=index_name)
+    client = get_client(missing_ok=False, end_token="")
 
     with QualtricsSession():
         survey = QualtricsSurvey(survey_id=survey_id)
         with survey.transcripts() as transcripts:
-            client.upload(documents=transcripts)
+            context = "\n\n---\n\n".join(
+                f"Response {response_id}:\n{transcript}"
+                for response_id, transcript in transcripts.items()
+            )
 
-            logger.info(f"Waiting for {wait_time} seconds before searching the index.")
-            time.sleep(wait_time)
-
-            result = client.rag(query=query)
-            print(result)
-            if auto_delete:
-                client.delete_index()
+    response = client.client.chat.completions.create(
+        model=client.model,
+        temperature=client.temperature,
+        stream=False,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You analyze cognitive debriefing survey transcripts. "
+                    "Answer using only the transcript context provided."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Transcript context:\n{context}\n\nQuestion:\n{query}",
+            },
+        ],
+    )
+    print(response.choices[0].message.content)
 
 
 def main(args):

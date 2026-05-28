@@ -52,8 +52,11 @@ jobs:
     - name: Install pip
       run: conda install pip
 
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
     - name: Install package
-      run: pip install -e .[dev]
+      run: pip install -e . --no-deps
 
     - name: Conda info
       run: |
