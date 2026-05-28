@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import datetime, timezone
 import reflex as rx
 from sqlmodel import select
@@ -8,6 +9,47 @@ from debriefly.reflex.backend.models import FieldType, Field, FieldValue, Form, 
 
 Missing = object()
 logger = logging.getLogger(__name__)
+
+
+def bundle_item_key(item) -> str:
+    return str(item.value or item.label or item.id)
+
+
+def bundle_field_input_name(field: Field, item) -> str:
+    return f"{field.name}___{item.id}"
+
+
+def bundle_option_input_name(field: Field, item, option) -> str:
+    return f"{field.name}___{item.id}___{option.id}"
+
+
+def option_label_for_value(field: Field, value: str) -> str:
+    for option in field.options:
+        option_value = str(option.value or option.label or option.id)
+        if value in {option_value, option.value, option.label, str(option.id)}:
+            return option.label or option_value
+    return str(value)
+
+
+def bundled_item_response(field: Field, item, form_data):
+    if field.type_ == FieldType.checkbox:
+        selected = []
+        for option in field.options:
+            key = bundle_option_input_name(field, item, option)
+            value = form_data.get(key, Missing)
+            if value is not Missing:
+                selected.append(option_label_for_value(field, str(value)))
+        return ", ".join(selected) if selected else Missing
+
+    key = bundle_field_input_name(field, item)
+    value = form_data.get(key, Missing)
+    if value is Missing and field.type_ == FieldType.scale and field.required:
+        value = field.scale_min
+    if value is Missing:
+        return Missing
+    if field.type_ == FieldType.radio:
+        return option_label_for_value(field, str(value))
+    return str(value)
 
 
 class FormEntryState(rx.State):
@@ -71,22 +113,42 @@ class FormEntryState(rx.State):
                 if field_value is not None:
                     session.delete(field_value)
 
-                value = form_data.get(field.name, Missing)
-                if value is not Missing:
-                    response.field_values.append(
-                        FieldValue(
-                            field_id=field.id,
-                            value=value,
-                        )
-                    )
-                elif field.type_ == FieldType.checkbox:
-                    for option in field.options:
-                        key = f"{field.name}___{option.value or option.label or option.id}"
-                        value = form_data.get(key, Missing)
-                        if value is not Missing:
-                            response.field_values.append(
-                                FieldValue(field_id=field.id, value=form_data[key])
+                if field.bundled:
+                    bundle_answers = []
+                    for item in field.bundle_items:
+                        item_response = bundled_item_response(field, item, form_data)
+                        if item_response is not Missing:
+                            bundle_answers.append(
+                                {
+                                    "label": item.label,
+                                    "value": bundle_item_key(item),
+                                    "response": item_response,
+                                }
                             )
+                    if bundle_answers:
+                        response.field_values.append(
+                            FieldValue(
+                                field_id=field.id,
+                                value=json.dumps(bundle_answers),
+                            )
+                        )
+                else:
+                    value = form_data.get(field.name, Missing)
+                    if value is not Missing:
+                        response.field_values.append(
+                            FieldValue(
+                                field_id=field.id,
+                                value=value,
+                            )
+                        )
+                    elif field.type_ == FieldType.checkbox:
+                        for option in field.options:
+                            key = f"{field.name}___{option.value or option.label or option.id}"
+                            value = form_data.get(key, Missing)
+                            if value is not Missing:
+                                response.field_values.append(
+                                    FieldValue(field_id=field.id, value=form_data[key])
+                                )
 
                 response.ts = datetime.now(timezone.utc)
                 session.add(response)

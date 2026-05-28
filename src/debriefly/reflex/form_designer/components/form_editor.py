@@ -6,7 +6,7 @@ from debriefly.reflex.form_designer.components.field_view import (
     field_input,
     field_prompt,
 )
-from debriefly.reflex.backend.models import FieldType, Field, Form, Option
+from debriefly.reflex.backend.models import BundleItem, FieldType, Field, Form, Option
 from debriefly.reflex.form_designer.components.form_select import FormSelectState
 
 
@@ -88,6 +88,7 @@ class FormEditorState(AppState):
         if not self._user_has_access():
             return
         field.pop("options", None)  # Remove options, relationship
+        field.pop("bundle_items", None)  # Remove relationship
         field = Field(**field)
         with rx.session() as session:
             session.add(self.form)
@@ -105,6 +106,7 @@ class FormEditorState(AppState):
                         existing_field.name = field.name
                         existing_field.type_ = field.type_
                         existing_field.required = field.required
+                        existing_field.bundled = field.bundled
                         existing_field.debriefing = field.debriefing
                         existing_field.prompt = field.prompt
                         existing_field.custom_system_message = (
@@ -239,6 +241,7 @@ class FormEditorState(AppState):
                     name=field.name,
                     type_=field.type_,
                     required=field.required,
+                    bundled=field.bundled,
                     debriefing=field.debriefing,
                     min_debriefing_time=field.min_debriefing_time,
                     max_debriefing_time=field.max_debriefing_time,
@@ -246,6 +249,8 @@ class FormEditorState(AppState):
                     ordering=float(ordering),
                     scale_min=field.scale_min,
                     scale_max=field.scale_max,
+                    custom_system_message=field.custom_system_message,
+                    custom_initial_message=field.custom_initial_message,
                     form_id=new_form.id,
                 )
                 session.add(new_field)
@@ -259,6 +264,15 @@ class FormEditorState(AppState):
                         field_id=new_field.id,  # new_field.id is now set
                     )
                     session.add(new_option)
+
+                for item in field.bundle_items:
+                    new_item = BundleItem(
+                        label=item.label,
+                        value=item.value,
+                        ordering=item.ordering,
+                        field_id=new_field.id,
+                    )
+                    session.add(new_item)
 
             session.commit()  # Commit all changes at once
 
@@ -352,6 +366,7 @@ def field_edit_view(field: Field):
                 flex_wrap="wrap",
             ),
             rx.text(rx.cond(field.required, "(required)", ""), size="1", ml="3"),
+            rx.text(rx.cond(field.bundled, "(bundled)", ""), size="1", ml="3"),
             rx.text(rx.cond(field.debriefing, "(debriefing)", ""), size="1", ml="3"),
             justify="between",
         ),

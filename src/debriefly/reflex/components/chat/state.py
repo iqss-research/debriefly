@@ -30,6 +30,58 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 
+def _first_present(mapping: dict, keys: tuple[str, ...], default: str = "") -> str:
+    for key in keys:
+        value = mapping.get(key)
+        if value is not None:
+            return str(value)
+    return default
+
+
+def _bundle_item_key(item) -> str:
+    return str(item.value or item.label or item.id)
+
+
+def _bundle_response_context(field: Field, raw_value: str):
+    try:
+        answers = json.loads(raw_value)
+    except (TypeError, json.JSONDecodeError):
+        return raw_value, [], raw_value
+
+    if isinstance(answers, dict):
+        answers = [
+            {"value": str(value), "response": response}
+            for value, response in answers.items()
+        ]
+    if not isinstance(answers, list):
+        return raw_value, [], raw_value
+
+    item_labels = {
+        _bundle_item_key(item): item.label or _bundle_item_key(item)
+        for item in field.bundle_items
+    }
+    subquestions = []
+    for answer in answers:
+        if not isinstance(answer, dict):
+            continue
+        value = _first_present(answer, ("value", "item", "key"))
+        label = _first_present(answer, ("label",), item_labels.get(value, value))
+        response = _first_present(answer, ("response", "answer"))
+        if label or response:
+            subquestions.append(
+                {
+                    "label": label,
+                    "value": value,
+                    "response": response,
+                }
+            )
+
+    response_text = "\n".join(
+        f"{item['label']}: {item['response']}" for item in subquestions
+    )
+    return response_text or raw_value, subquestions, response_text or raw_value
+
+
 class QA(rx.Base):
     question: str
     answer: str
@@ -172,7 +224,16 @@ class ChatState(MainState):
             self.field_value_id = field_value.id
             field_value_value_id = field_value.value
 
-            if field_type in (FieldType.radio, FieldType.checkbox):
+            subquestions = []
+            subquestions_text = ""
+            is_bundled_question = self.field.bundled
+            if is_bundled_question:
+                (
+                    field_value_label,
+                    subquestions,
+                    subquestions_text,
+                ) = _bundle_response_context(self.field, field_value_value_id)
+            elif field_type in (FieldType.radio, FieldType.checkbox):
                 option = session.exec(
                     select(Option)
                     .where(Option.field_id == field_id)
@@ -215,6 +276,9 @@ class ChatState(MainState):
             kwargs = {
                 "question": debriefing_field_prompt,
                 "response": debriefing_field_value,
+                "is_bundled_question": is_bundled_question,
+                "subquestions": subquestions,
+                "subquestions_text": subquestions_text,
                 "end_of_survey_token": "<end_of_chat>",
             }
             self.system_message = env.get_template("system_message.jinja").render(
