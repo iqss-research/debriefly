@@ -7,6 +7,7 @@ Create Date: 2026-05-27 00:00:00.000000
 """
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 
@@ -18,25 +19,32 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute(
-        """
+    bind = op.get_bind()
+    bind.execute(
+        sa.text(
+            """
         UPDATE field
-        SET bundled = 0
+        SET bundled = :bundled
         WHERE id NOT IN (
             SELECT DISTINCT field_id
             FROM bundleitem
         )
         """
+        ),
+        {"bundled": False},
     )
-    op.execute(
-        """
+    bind.execute(
+        sa.text(
+            """
         UPDATE field
-        SET bundled = 1
+        SET bundled = :bundled
         WHERE id IN (
             SELECT DISTINCT field_id
             FROM bundleitem
         )
         """
+        ),
+        {"bundled": True},
     )
 
 

@@ -31,6 +31,10 @@ def option_label_for_value(field: Field, value: str) -> str:
     return str(value)
 
 
+def field_type_value(field: Field) -> str:
+    return field.type_.value if isinstance(field.type_, FieldType) else str(field.type_)
+
+
 def bundled_item_response(field: Field, item, form_data):
     if field.type_ == FieldType.checkbox:
         selected = []
@@ -192,15 +196,74 @@ class FormEntryState(rx.State):
 
 class FormEntryTabState(rx.State):
     fields: list[list[Field]] = []
+    tab_back_enabled: list[bool] = []
     n_tabs: int = 0
     active_tab: int = 0
     is_last_tab: bool = False
     is_beyond_last_tab: bool = False
+    can_go_back: bool = False
 
     # Markdown fields have a provision of having placeholders
     # (e.g. `{submission_id}`) that are evaluated at runtime
     # This dict holds a mapping of string field id to such markdown values
     markdowns: dict[str, str] = {}
+
+    @staticmethod
+    def split_fields_into_tabs(
+        fields: list[Field],
+    ) -> tuple[list[list[Field]], list[bool]]:
+        """Group fields into respondent pages and track page-break back settings."""
+        tabs: list[list[Field]] = []
+        tab_back_enabled: list[bool] = []
+        this_group_fields: list[Field] = []
+        group_back_enabled = False
+        last_split_was_debriefing = False
+
+        for field in fields:
+            if field_type_value(field) == FieldType.pagebreak.value:
+                if this_group_fields:
+                    tabs.append(this_group_fields)
+                    tab_back_enabled.append(group_back_enabled)
+                    this_group_fields = []
+                    last_split_was_debriefing = False
+
+                if tabs and not last_split_was_debriefing:
+                    group_back_enabled = bool(field.allow_back)
+                else:
+                    group_back_enabled = False
+                continue
+
+            this_group_fields.append(field)
+
+            if bool(field.debriefing):
+                tabs.append(this_group_fields)
+                tab_back_enabled.append(group_back_enabled)
+                this_group_fields = []
+                group_back_enabled = False
+                last_split_was_debriefing = True
+
+        if this_group_fields:
+            tabs.append(this_group_fields)
+            tab_back_enabled.append(group_back_enabled)
+
+        return tabs, tab_back_enabled
+
+    @staticmethod
+    def tab_can_go_back(
+        fields: list[list[Field]], tab_back_enabled: list[bool], active_tab: int
+    ) -> bool:
+        if active_tab <= 0 or active_tab >= len(fields):
+            return False
+        if active_tab >= len(tab_back_enabled) or not tab_back_enabled[active_tab]:
+            return False
+        return True
+
+    def _refresh_navigation(self):
+        self.is_last_tab = self.active_tab >= self.n_tabs - 1
+        self.is_beyond_last_tab = self.active_tab >= self.n_tabs
+        self.can_go_back = self.tab_can_go_back(
+            self.fields, self.tab_back_enabled, self.active_tab
+        )
 
     async def on_load(self):
         logger.info("FormEntryTabState on_load")
@@ -209,6 +272,7 @@ class FormEntryTabState(rx.State):
             return
 
         self.fields = []
+        self.tab_back_enabled = []
         self.n_tabs = 0
 
         state = await self.get_state(FormEntryState)
@@ -217,37 +281,33 @@ class FormEntryTabState(rx.State):
 
             # Break fields in "pages", with page breaks after any debriefing
             # field, or any explicit `pagebreak` field.
-            this_group_fields = []
             for field in form.fields:
 
-                if field.type_ == FieldType.static:
+                if field_type_value(field) == FieldType.static.value:
                     self.markdowns[str(field.id)] = field.prompt.format(
                         **self.markdown_variables()
                     )
                 else:
                     self.markdowns[str(field.id)] = ""
 
-                if (field.type_ == FieldType.pagebreak) or bool(field.debriefing):
-                    if field.type_ != FieldType.pagebreak:
-                        this_group_fields.append(field)
-                    if len(this_group_fields) > 0:
-                        self.fields.append(this_group_fields)
-                    this_group_fields = []
-                else:
-                    this_group_fields.append(field)
-
-            if this_group_fields:
-                self.fields.append(this_group_fields)
+            self.fields, self.tab_back_enabled = self.split_fields_into_tabs(
+                form.fields
+            )
 
             self.n_tabs = len(self.fields)
         self.active_tab = 0
-        self.is_last_tab = self.n_tabs == 1
+        self._refresh_navigation()
 
     async def advance(self):
         logger.info("Advancing to next tab")
         self.active_tab += 1
-        self.is_last_tab = self.active_tab >= self.n_tabs - 1
-        self.is_beyond_last_tab = self.active_tab >= self.n_tabs
+        self._refresh_navigation()
+
+    async def previous(self):
+        logger.info("Moving to previous tab")
+        if self.can_go_back:
+            self.active_tab -= 1
+            self._refresh_navigation()
 
     def markdown_variables(self) -> dict[str, str]:
         return dict(
@@ -306,8 +366,36 @@ def form_entry_page():
                 ),
                 rx.cond(
                     FormEntryTabState.is_last_tab,
-                    rx.button("Submit", type="submit"),
-                    rx.button("Next", type="submit"),
+                    rx.hstack(
+                        rx.cond(
+                            FormEntryTabState.can_go_back,
+                            rx.button(
+                                rx.icon("arrow-left", size=16),
+                                "Back",
+                                type="button",
+                                variant="outline",
+                                on_click=FormEntryTabState.previous,
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.button("Submit", type="submit"),
+                        spacing="2",
+                    ),
+                    rx.hstack(
+                        rx.cond(
+                            FormEntryTabState.can_go_back,
+                            rx.button(
+                                rx.icon("arrow-left", size=16),
+                                "Back",
+                                type="button",
+                                variant="outline",
+                                on_click=FormEntryTabState.previous,
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.button("Next", type="submit"),
+                        spacing="2",
+                    ),
                 ),
             ),
             rx.cond(

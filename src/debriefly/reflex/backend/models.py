@@ -101,6 +101,7 @@ class Field(rx.Model, table=True):
     required: bool = False
     bundled: bool = False
     debriefing: bool = False
+    allow_back: bool = False
     min_debriefing_time: Optional[int] = None
     max_debriefing_time: Optional[int] = None
     prompt: str = ""
