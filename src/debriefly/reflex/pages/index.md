@@ -20,7 +20,7 @@ Debriefly uses your key to run the debriefing chats for surveys you own. The key
 
 To get an OpenAI API key:
 
-1. Go to the [OpenAI API keys page](https://platform.openai.com/api-keys).
+1. Go to the <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI API keys page</a>.
 2. Sign in to your OpenAI account, or create one if you do not have one.
 3. Set up API billing or credits if OpenAI asks you to do so. API usage is billed separately from ChatGPT subscriptions.
 4. Create a new secret key.

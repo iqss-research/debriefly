@@ -10,7 +10,12 @@ from debriefly.reflex.backend.backend import MainState
 load_dotenv()
 
 
-@rx.page(route="/", title="Debriefly", on_load=MainState.init)
+@rx.page(
+    route="/",
+    title="Debriefly",
+    image="/debriefly-icon.png",
+    on_load=MainState.init,
+)
 @template
 def index() -> rx.Component:
     index_content = (
@@ -32,10 +37,17 @@ def index() -> rx.Component:
     }
 
     return style.layout(
+        rx.image(
+            src="/debriefly-logo.png",
+            alt="Debriefly",
+            width=["min(100%, 18rem)", "min(100%, 24rem)", "min(100%, 34rem)"],
+            height="auto",
+            margin_bottom="1rem",
+        ),
         rx.markdown(
             index_content.read_text(),
             custom_styles=markdown_styles,
-        )
+        ),
     )
 
 

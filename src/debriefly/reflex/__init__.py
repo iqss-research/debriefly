@@ -31,6 +31,15 @@ if "field_id" not in rx.State.__fields__:
 app = rx.App(
     style=styles.base_style,
     stylesheets=styles.base_stylesheets,
+    head_components=[
+        rx.el.link(rel="icon", href="/debriefly-icon.png", type="image/png"),
+        rx.el.link(
+            rel="apple-touch-icon",
+            href="/debriefly-icon.png",
+            sizes="1254x1254",
+        ),
+        rx.el.link(rel="shortcut icon", href="/favicon.ico", type="image/x-icon"),
+    ],
     title="Debriefly",
     description="Debriefing App for Qualtrics",
     onload=MainState.init,
