@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+import secrets
 from typing import Optional
 from sqlmodel import Field
 import reflex as rx
@@ -8,6 +9,10 @@ import json
 from reflex.utils.serializers import serializer
 from sqlalchemy.exc import OperationalError
 from debriefly.openai import DEFAULT_OPENAI_MODEL
+
+
+def _new_public_id() -> str:
+    return secrets.token_urlsafe(16)
 
 
 class Config(rx.Model, table=True):
@@ -151,6 +156,10 @@ class Form(rx.Model, table=True):
         back_populates="form",
         sa_relationship_kwargs={"cascade": "all, delete"},
     )
+    qualtrics_embed_sessions: list["QualtricsEmbedSession"] = sqlmodel.Relationship(
+        back_populates="form",
+        sa_relationship_kwargs={"cascade": "all, delete, delete-orphan"},
+    )
     indexed_ts: datetime = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime(timezone=True),
@@ -215,4 +224,39 @@ class Response(rx.Model, table=True):
 
     field_values: list[FieldValue] = sqlmodel.Relationship(
         sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete"}
+    )
+
+
+class QualtricsEmbedSession(rx.Model, table=True):
+    __tablename__ = "qualtrics_embed_session"
+
+    id: int = sqlmodel.Field(primary_key=True)
+    public_id: str = sqlmodel.Field(
+        default_factory=_new_public_id, index=True, nullable=False
+    )
+    form_id: int = sqlmodel.Field(foreign_key="form.id", ondelete="CASCADE", index=True)
+    source: str = "qualtrics"
+    external_response_id: str = ""
+    external_question_id: str = ""
+    question_text: str = sqlmodel.Field(
+        sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=False)
+    )
+    response_text: str = sqlmodel.Field(
+        sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=False)
+    )
+    transcript: Optional[str] = sqlmodel.Field(
+        default=None, sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=True)
+    )
+    completed: bool = False
+    created_at: datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(sqlmodel.DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(sqlmodel.DateTime(timezone=True), nullable=False),
+    )
+
+    form: Optional[Form] = sqlmodel.Relationship(
+        back_populates="qualtrics_embed_sessions"
     )

@@ -3,9 +3,16 @@ import csv
 import io
 import logging
 import reflex as rx
+from sqlmodel import select
 from debriefly.reflex.form_designer import constants, routes, style, utils
 from debriefly.reflex.form_designer.components import field_prompt
-from debriefly.reflex.backend.models import Form, Response, FieldType, FieldValue
+from debriefly.reflex.backend.models import (
+    Form,
+    QualtricsEmbedSession,
+    Response,
+    FieldType,
+    FieldValue,
+)
 from debriefly.reflex.backend.backend import MainState as AppState
 
 logger = logging.getLogger(__name__)
@@ -44,12 +51,38 @@ def bundle_answer_map(raw_value: str) -> dict[str, str]:
     return mapped
 
 
+def transcript_messages(raw_transcript: str | None) -> list[dict[str, str]]:
+    if not raw_transcript:
+        return []
+
+    try:
+        messages = json.loads(raw_transcript)
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    if not isinstance(messages, list):
+        return []
+
+    cleaned = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role", ""))
+        content = str(message.get("content", ""))
+        if role and content:
+            cleaned.append({"role": role, "content": content})
+    return cleaned
+
+
 class ResponsesState(AppState):
     form: Form = Form()
     responses: list[Response] = []
+    qualtrics_embed_sessions: list[QualtricsEmbedSession] = []
     # { response_id: { field_id: list_of_messages, ... }, ... }
     # where list_of_messages is a list of dicts with keys "role" and "content"
     response_debriefings: dict[int, dict[int, list[dict[str, str]]]] = {}
+    # { qualtrics_embed_session.public_id: list_of_messages, ... }
+    qualtrics_debriefings: dict[str, list[dict[str, str]]] = {}
 
     @rx.var
     def index_is_current(self) -> bool:
@@ -74,10 +107,17 @@ class ResponsesState(AppState):
     # added to disable RAG when there are no chat responses
     @rx.var
     def has_chat_responses(self) -> bool:
-        return any(
+        debriefly_responses = any(
             any(messages for messages in debriefings.values())
             for debriefings in self.response_debriefings.values()
         )
+        return debriefly_responses or any(
+            messages for messages in self.qualtrics_debriefings.values()
+        )
+
+    @rx.var
+    def has_qualtrics_embed_sessions(self) -> bool:
+        return len(self.qualtrics_embed_sessions) > 0
 
     async def index(self):
         if self.form_id != "":
@@ -104,6 +144,8 @@ class ResponsesState(AppState):
     def load_responses(self):
         with rx.session() as session:
             self.response_debriefings = {}  # reset debriefings
+            self.qualtrics_debriefings = {}
+            self.qualtrics_embed_sessions = []
             form = session.get(Form, self.form_id)
             if not self._user_has_access(form) or form is None:
                 self.form = Form()
@@ -123,6 +165,16 @@ class ResponsesState(AppState):
                     else:
                         response_debriefings[field_value.field_id] = []
                 self.response_debriefings[response.id] = response_debriefings
+
+            self.qualtrics_embed_sessions = session.exec(
+                select(QualtricsEmbedSession)
+                .where(QualtricsEmbedSession.form_id == form.id)
+                .order_by(QualtricsEmbedSession.created_at)
+            ).all()
+            self.qualtrics_debriefings = {
+                embed_session.public_id: transcript_messages(embed_session.transcript)
+                for embed_session in self.qualtrics_embed_sessions
+            }
 
     def delete_response(self, id: int):
         if not self._user_has_access():
@@ -208,6 +260,34 @@ class ResponsesState(AppState):
                                 transcript_text += f"Assistant: {msg['content']}\n\n"
                         transcript_text += "\n"  # Extra newline after each field's chat
             transcript_text += "\n"  # Extra newline between responses
+
+        for embed_session in self.qualtrics_embed_sessions:
+            messages = self.qualtrics_debriefings.get(embed_session.public_id, [])
+            if not messages:
+                continue
+
+            transcript_text += (
+                f"--- Qualtrics Interview {embed_session.public_id} ---\n\n"
+            )
+            if embed_session.external_response_id:
+                transcript_text += (
+                    f"Qualtrics Response ID: "
+                    f"{embed_session.external_response_id}\n\n"
+                )
+            if embed_session.external_question_id:
+                transcript_text += (
+                    f"Qualtrics Question ID: "
+                    f"{embed_session.external_question_id}\n\n"
+                )
+            transcript_text += f"Question: {embed_session.question_text}\n\n"
+            transcript_text += f"Answer: {embed_session.response_text}\n\n"
+            for msg in messages:
+                if msg["role"] == "user":
+                    transcript_text += f"User: {msg['content']}\n\n"
+                elif msg["role"] == "assistant":
+                    transcript_text += f"Assistant: {msg['content']}\n\n"
+            transcript_text += "\n"
+
         filename = f"{self.form.name}_transcripts.txt"
         return rx.download(data=transcript_text, filename=filename)
 
@@ -242,6 +322,103 @@ def debriefing_transcript(response: Response, field_value: FieldValue):
                 ),
             ),
         ),
+    )
+
+
+def qualtrics_embed_transcript(embed_session: QualtricsEmbedSession):
+    return rx.vstack(
+        rx.foreach(
+            ResponsesState.qualtrics_debriefings[embed_session.public_id.to(str)],
+            lambda message: rx.cond(
+                message["role"] == "assistant",
+                rx.box(
+                    rx.markdown(
+                        message["content"],
+                        background_color=rx.color("accent", 4),
+                        color=rx.color("accent", 12),
+                        **message_style,
+                    ),
+                    text_align="left",
+                    padding_top="1em",
+                    width="100%",
+                ),
+                rx.box(
+                    rx.markdown(
+                        message["content"],
+                        background_color=rx.color("mauve", 4),
+                        color=rx.color("mauve", 12),
+                        **message_style,
+                    ),
+                    text_align="right",
+                    margin_top="1em",
+                    width="100%",
+                ),
+            ),
+        ),
+    )
+
+
+def qualtrics_embed_content(embed_session: QualtricsEmbedSession):
+    return rx.vstack(
+        rx.hstack(
+            rx.text("Transcript ID:", weight="bold"),
+            rx.code(embed_session.public_id),
+            align="center",
+        ),
+        rx.cond(
+            embed_session.external_response_id != "",
+            rx.hstack(
+                rx.text("Qualtrics Response ID:", weight="bold"),
+                rx.text(embed_session.external_response_id),
+                align="center",
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            embed_session.external_question_id != "",
+            rx.hstack(
+                rx.text("Qualtrics Question ID:", weight="bold"),
+                rx.text(embed_session.external_question_id),
+                align="center",
+            ),
+            rx.fragment(),
+        ),
+        rx.box(
+            rx.text("Question", weight="bold"),
+            rx.markdown(embed_session.question_text),
+            width="100%",
+        ),
+        rx.box(
+            rx.text("Answer", weight="bold"),
+            rx.markdown(embed_session.response_text),
+            width="100%",
+        ),
+        qualtrics_embed_transcript(embed_session),
+        align="start",
+        gap="1em",
+    )
+
+
+def qualtrics_embed_response(embed_session: QualtricsEmbedSession):
+    return rx.accordion.item(
+        header=rx.hstack(
+            rx.text(
+                rx.cond(
+                    embed_session.external_response_id != "",
+                    embed_session.external_response_id,
+                    embed_session.public_id,
+                )
+            ),
+            rx.cond(
+                embed_session.completed,
+                rx.badge("Complete", color_scheme="green"),
+                rx.badge("Started", color_scheme="yellow"),
+            ),
+            justify="between",
+            align="center",
+        ),
+        content=qualtrics_embed_content(embed_session),
+        value=embed_session.public_id,
     )
 
 
@@ -313,6 +490,18 @@ def responses_accordion(**props):
         rx.foreach(
             ResponsesState.responses,
             response,
+        ),
+        collapsible=True,
+        type="multiple",
+        **props,
+    )
+
+
+def qualtrics_embed_accordion(**props):
+    return rx.accordion.root(
+        rx.foreach(
+            ResponsesState.qualtrics_embed_sessions,
+            qualtrics_embed_response,
         ),
         collapsible=True,
         type="multiple",
@@ -396,5 +585,24 @@ def responses_page(**props):
         responses_accordion(
             variant="outline",
             radius="small",
+        ),
+        rx.cond(
+            ResponsesState.has_qualtrics_embed_sessions,
+            rx.vstack(
+                rx.heading("Qualtrics Embedded Interviews", size="4"),
+                rx.text(
+                    "These chats were collected from Qualtrics embeds. "
+                    "Qualtrics stores the transcript ID; Debriefly stores the full chat."
+                ),
+                qualtrics_embed_accordion(
+                    variant="outline",
+                    radius="small",
+                    width="100%",
+                ),
+                width="100%",
+                spacing="3",
+                margin_top="2em",
+            ),
+            rx.fragment(),
         ),
     )

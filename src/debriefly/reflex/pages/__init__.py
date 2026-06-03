@@ -32,6 +32,7 @@ from debriefly.reflex.pages.privacy import privacy_statement
 from debriefly.reflex.pages.admin import admin
 
 from debriefly.reflex.pages.consent import consent
+from debriefly.reflex.pages.qualtrics_embed import qualtrics_embed
 
 # specify pages that are loaded by default
 __all__ = [
@@ -53,4 +54,5 @@ __all__ = [
     "feedback_page",
     "admin",
     "consent",
+    "qualtrics_embed",
 ]

@@ -2,10 +2,44 @@ import reflex as rx
 import logging
 import openai
 from debriefly.openai import get_client
-from debriefly.reflex.backend.models import UserOpenAISettings
+from debriefly.reflex.backend.models import QualtricsEmbedSession, UserOpenAISettings
 from debriefly.reflex.form_designer.pages.response import ResponsesState
 
 logger = logging.getLogger(__name__)
+
+
+def qualtrics_debriefing_context_chunks(
+    embed_sessions: list[QualtricsEmbedSession],
+    debriefings: dict[str, list[dict[str, str]]],
+) -> list[str]:
+    chunks = []
+    for embed_session in embed_sessions:
+        messages = debriefings.get(embed_session.public_id, [])
+        if not messages:
+            continue
+
+        transcript = "\n".join(
+            f"{message['role']}: {message['content']}" for message in messages
+        )
+        metadata = [
+            f"Question: {embed_session.question_text}",
+            f"Answer: {embed_session.response_text}",
+        ]
+        if embed_session.external_response_id:
+            metadata.insert(
+                0, f"Qualtrics Response ID: {embed_session.external_response_id}"
+            )
+        if embed_session.external_question_id:
+            metadata.insert(
+                0, f"Qualtrics Question ID: {embed_session.external_question_id}"
+            )
+
+        chunks.append(
+            f"Qualtrics Interview {embed_session.public_id}:\n"
+            + "\n".join(metadata)
+            + f"\n\n{transcript}"
+        )
+    return chunks
 
 
 class QA(rx.Base):
@@ -136,5 +170,12 @@ class AnalysisState(ResponsesState):
                     f"Response {response.client_token}:\n"
                     + "\n\n".join(response_chunks)
                 )
+
+        chunks.extend(
+            qualtrics_debriefing_context_chunks(
+                self.qualtrics_embed_sessions,
+                self.qualtrics_debriefings,
+            )
+        )
 
         return "\n\n---\n\n".join(chunks)
