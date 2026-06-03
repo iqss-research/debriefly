@@ -86,6 +86,18 @@ class FormEntryState(rx.State):
         with rx.session() as session:
             self.form = session.exec(select(Form).where(Form.code == code)).first()
 
+    def notify_parent_survey_complete(self):
+        payload = {
+            "source": "debriefly",
+            "type": "debriefly:survey_complete",
+            "status": "complete",
+            "submissionId": self._ensure_client_token(),
+        }
+        return rx.call_script(
+            "window.parent && window.parent.postMessage("
+            f"{json.dumps(payload)}, '*');"
+        )
+
     async def handle_submit(self, form_data):
         logger.info("Handling form submission")
         tab_state = await self.get_state(FormEntryTabState)

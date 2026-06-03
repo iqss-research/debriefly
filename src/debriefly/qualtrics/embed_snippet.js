@@ -7,10 +7,15 @@
  * In Survey Flow, create Embedded Data fields named:
  *   debriefly_transcript_id
  *   debriefly_status
+ *   __js_debriefly_transcript_id
+ *   __js_debriefly_status
  *
- * Some Qualtrics accounts require JavaScript-written embedded-data names to
- * start with "__js_"; this snippet sets both names for compatibility.
+ * The __js_ versions are included because some Qualtrics accounts require
+ * JavaScript-written embedded-data names to use that prefix.
  */
+Qualtrics.SurveyEngine.addOnload(function () {
+});
+
 Qualtrics.SurveyEngine.addOnReady(function () {
   var question = this;
 
@@ -22,6 +27,24 @@ Qualtrics.SurveyEngine.addOnReady(function () {
   var nextButton = document.getElementById("NextButton");
   var messageHandler = null;
   var iframe = null;
+  var statusBox = null;
+
+  function cleanText(text) {
+    var value = (text || "").trim();
+    value = value.split("\n").join(" ");
+    value = value.split("\t").join(" ");
+    while (value.indexOf("  ") !== -1) {
+      value = value.split("  ").join(" ");
+    }
+    return value;
+  }
+
+  function cleanBaseUrl(url) {
+    if (url.charAt(url.length - 1) === "/") {
+      return url.slice(0, -1);
+    }
+    return url;
+  }
 
   function setEmbeddedData(name, value) {
     if (Qualtrics.SurveyEngine.setJSEmbeddedData) {
@@ -33,10 +56,32 @@ Qualtrics.SurveyEngine.addOnReady(function () {
     }
   }
 
+  function showStatus(message) {
+    if (!questionEl) return;
+    if (!statusBox) {
+      statusBox = document.createElement("div");
+      statusBox.style.marginTop = "12px";
+      statusBox.style.padding = "10px 12px";
+      statusBox.style.border = "1px solid #d8d5dd";
+      statusBox.style.borderRadius = "6px";
+      statusBox.style.background = "#faf9fb";
+      statusBox.style.color = "#4b4658";
+      questionEl.appendChild(statusBox);
+    }
+    statusBox.innerText = message;
+    statusBox.style.display = "";
+  }
+
+  function hideStatus() {
+    if (statusBox) {
+      statusBox.style.display = "none";
+    }
+  }
+
   function choiceLabel(input) {
     var row = input.closest("li, tr, .Choice, .Selection, .q-radio, .q-checkbox");
     if (row && row.innerText) {
-      return row.innerText.trim().replace(/\s+/g, " ");
+      return cleanText(row.innerText);
     }
     return input.value || "";
   }
@@ -58,6 +103,13 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       return textInput.value.trim();
     }
 
+    var selectInput = questionEl.querySelector("select");
+    if (selectInput && selectInput.value) {
+      return cleanText(
+        selectInput.options[selectInput.selectedIndex].text || selectInput.value
+      );
+    }
+
     return "";
   }
 
@@ -67,15 +119,19 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       question: QUESTION_TEXT,
       response: answer,
       qid: question.questionId,
-      origin: window.location.origin,
+      origin: window.location.origin
     });
-    return DEBRIEFLY_BASE_URL.replace(/\/$/, "") + "/qualtrics/embed/?" + params;
+    return cleanBaseUrl(DEBRIEFLY_BASE_URL) + "/qualtrics/embed/?" + params.toString();
   }
 
   function showWidget() {
     var answer = currentAnswer();
-    if (!answer) return;
+    if (!answer) {
+      showStatus("Answer this question to start the Debriefly interview.");
+      return;
+    }
 
+    hideStatus();
     setEmbeddedData("debriefly_status", "started");
     if (nextButton) nextButton.style.display = "none";
 
@@ -121,9 +177,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
     showWidget();
   }
 
-  Qualtrics.SurveyEngine.addOnUnload(function () {
-    if (messageHandler) {
-      window.removeEventListener("message", messageHandler);
-    }
-  });
+});
+
+Qualtrics.SurveyEngine.addOnUnload(function () {
 });

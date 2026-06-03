@@ -114,7 +114,7 @@ def _form_entry_chat() -> rx.Component:
 @rx.page(
     route=routes.FORM_ENTRY_SUCCESS,
     title="FORM_ENTRY_SUCCESS",
-    on_load=[MainState.init],
+    on_load=[MainState.init, FormEntryState.notify_parent_survey_complete],
 )
 def _form_entry_success() -> rx.Component:
     return style.layout(
