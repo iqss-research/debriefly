@@ -46,6 +46,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["form_id"],
             ["form.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
     )

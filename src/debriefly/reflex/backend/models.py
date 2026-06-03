@@ -156,6 +156,10 @@ class Form(rx.Model, table=True):
         back_populates="form",
         sa_relationship_kwargs={"cascade": "all, delete"},
     )
+    qualtrics_embed_sessions: list["QualtricsEmbedSession"] = sqlmodel.Relationship(
+        back_populates="form",
+        sa_relationship_kwargs={"cascade": "all, delete, delete-orphan"},
+    )
     indexed_ts: datetime = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime(timezone=True),
@@ -230,7 +234,7 @@ class QualtricsEmbedSession(rx.Model, table=True):
     public_id: str = sqlmodel.Field(
         default_factory=_new_public_id, index=True, nullable=False
     )
-    form_id: int = sqlmodel.Field(foreign_key="form.id", index=True)
+    form_id: int = sqlmodel.Field(foreign_key="form.id", ondelete="CASCADE", index=True)
     source: str = "qualtrics"
     external_response_id: str = ""
     external_question_id: str = ""
@@ -253,4 +257,6 @@ class QualtricsEmbedSession(rx.Model, table=True):
         sa_column=sqlmodel.Column(sqlmodel.DateTime(timezone=True), nullable=False),
     )
 
-    form: Optional[Form] = sqlmodel.Relationship()
+    form: Optional[Form] = sqlmodel.Relationship(
+        back_populates="qualtrics_embed_sessions"
+    )
