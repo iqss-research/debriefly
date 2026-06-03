@@ -90,6 +90,159 @@ The chat transcript file is designed for qualitative review. You can read it dir
 6. Revise question wording, answer choices, or instructions.
 7. Repeat until respondents interpret the questions as intended.
 
+## Using Debriefly Inside Qualtrics
+
+Yes, you can keep respondents inside Qualtrics and show the Debriefly interview on the same Qualtrics page. The basic idea is simple: Qualtrics asks the survey question, then an embedded Debriefly iframe appears below the answer and conducts the cognitive interview. Debriefly stores the full transcript, and Qualtrics stores only a short transcript ID.
+
+This requires a Qualtrics account that allows question-level JavaScript and iframe embeds. If your Qualtrics account blocks custom JavaScript, use the regular Debriefly participant link instead.
+
+### What You Need
+
+1. A Debriefly form owned by the researcher whose OpenAI API key should run the interview.
+2. The Debriefly form code. You can get it from the participant URL: in `/form/abc123`, the form code is `abc123`.
+3. A Qualtrics question that should trigger the cognitive interview.
+4. Two Qualtrics Embedded Data fields:
+
+```text
+debriefly_transcript_id
+debriefly_status
+```
+
+### Qualtrics Setup
+
+1. In Qualtrics, open **Survey Flow**.
+2. Add Embedded Data fields named `debriefly_transcript_id` and `debriefly_status`.
+3. Go to the Qualtrics question you want to debrief.
+4. Open that question's JavaScript editor.
+5. Paste the code below.
+6. Replace `FORM_CODE` and `QUESTION_TEXT`.
+7. Preview the survey before sending it to respondents.
+
+```javascript
+Qualtrics.SurveyEngine.addOnReady(function () {
+  var question = this;
+
+  var DEBRIEFLY_BASE_URL = "https://www.debriefly.net";
+  var FORM_CODE = "REPLACE_WITH_DEBRIEFLY_FORM_CODE";
+  var QUESTION_TEXT = "REPLACE_WITH_THE_QUALTRICS_QUESTION_TEXT";
+
+  var questionEl = document.getElementById(question.questionId);
+  var nextButton = document.getElementById("NextButton");
+  var messageHandler = null;
+  var iframe = null;
+
+  function setEmbeddedData(name, value) {
+    if (Qualtrics.SurveyEngine.setJSEmbeddedData) {
+      Qualtrics.SurveyEngine.setJSEmbeddedData(name, value);
+      Qualtrics.SurveyEngine.setJSEmbeddedData("__js_" + name, value);
+    } else if (Qualtrics.SurveyEngine.setEmbeddedData) {
+      Qualtrics.SurveyEngine.setEmbeddedData(name, value);
+      Qualtrics.SurveyEngine.setEmbeddedData("__js_" + name, value);
+    }
+  }
+
+  function choiceLabel(input) {
+    var row = input.closest("li, tr, .Choice, .Selection, .q-radio, .q-checkbox");
+    if (row && row.innerText) {
+      return row.innerText.trim().replace(/\s+/g, " ");
+    }
+    return input.value || "";
+  }
+
+  function currentAnswer() {
+    if (!questionEl) return "";
+
+    var selected = Array.prototype.slice.call(
+      questionEl.querySelectorAll(
+        'input[type="radio"]:checked, input[type="checkbox"]:checked'
+      )
+    );
+    if (selected.length > 0) {
+      return selected.map(choiceLabel).join("; ");
+    }
+
+    var textInput = questionEl.querySelector("textarea, input[type='text']");
+    if (textInput && textInput.value) {
+      return textInput.value.trim();
+    }
+
+    return "";
+  }
+
+  function embedUrl(answer) {
+    var params = new URLSearchParams({
+      form_code: FORM_CODE,
+      question: QUESTION_TEXT,
+      response: answer,
+      qid: question.questionId,
+      origin: window.location.origin,
+    });
+    return DEBRIEFLY_BASE_URL.replace(/\/$/, "") + "/qualtrics/embed/?" + params;
+  }
+
+  function showWidget() {
+    var answer = currentAnswer();
+    if (!answer) return;
+
+    setEmbeddedData("debriefly_status", "started");
+    if (nextButton) nextButton.style.display = "none";
+
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.title = "Debriefly cognitive interview";
+      iframe.style.width = "100%";
+      iframe.style.minHeight = "520px";
+      iframe.style.border = "1px solid #d8d5dd";
+      iframe.style.borderRadius = "8px";
+      iframe.style.marginTop = "16px";
+      iframe.setAttribute("allow", "clipboard-write");
+      questionEl.appendChild(iframe);
+    }
+
+    iframe.src = embedUrl(answer);
+  }
+
+  messageHandler = function (event) {
+    var expectedOrigin = new URL(DEBRIEFLY_BASE_URL).origin;
+    if (event.origin !== expectedOrigin) return;
+    if (!event.data || event.data.source !== "debriefly") return;
+
+    if (event.data.sessionId) {
+      setEmbeddedData("debriefly_transcript_id", event.data.sessionId);
+    }
+
+    if (event.data.type === "debriefly:complete") {
+      setEmbeddedData("debriefly_status", "complete");
+      if (nextButton) nextButton.style.display = "";
+    }
+
+    if (event.data.type === "debriefly:error") {
+      setEmbeddedData("debriefly_status", "error");
+      if (nextButton) nextButton.style.display = "";
+    }
+  };
+  window.addEventListener("message", messageHandler);
+
+  if (questionEl) {
+    questionEl.addEventListener("change", showWidget);
+    questionEl.addEventListener("blur", showWidget, true);
+    showWidget();
+  }
+
+  Qualtrics.SurveyEngine.addOnUnload(function () {
+    if (messageHandler) {
+      window.removeEventListener("message", messageHandler);
+    }
+  });
+});
+```
+
+### How To Know It Worked
+
+In Qualtrics Preview, answer the question. A Debriefly interview box should appear below the question, and the Qualtrics **Next** button should disappear until the interview finishes. After completion, the exported Qualtrics response should include `debriefly_transcript_id` and `debriefly_status`.
+
+If the iframe never appears, your Qualtrics account may not allow custom JavaScript or the answer format may need a small adjustment in the JavaScript. If the iframe appears but says the form is not ready, check that the Debriefly form owner saved an OpenAI API key.
+
 ## Reference
 
 Hinck, Musashi, King, Gary, Nakamura, Kentaro, & Stewart, Brandon M. (2026). Where's the Evidence that Respondents Understand Your Survey Questions?
