@@ -106,22 +106,18 @@ This requires a Qualtrics account that allows question-level JavaScript and exte
 6. Add an **Embedded Data** element before the block where the embedded Debriefly survey will appear.
 7. Add these four Embedded Data fields, leaving their values blank. The `__js_` fields support Qualtrics accounts that require a prefix for JavaScript-written values.
 
-```text
-debriefly_submission_id
-debriefly_status
-__js_debriefly_submission_id
-__js_debriefly_status
-```
+   ```text
+   debriefly_submission_id
+   debriefly_status
+   __js_debriefly_submission_id
+   __js_debriefly_status
+   ```
 
-8. Save the Survey Flow.
-9. In the Qualtrics survey editor, add a placeholder question where you want the Debriefly survey to appear.
-10. If your Qualtrics account has **Text / Graphic**, use that. If it does not, use any ordinary question type, such as Multiple Choice or Text Entry.
-11. Make the placeholder question **not required**. The JavaScript will hide the placeholder question content and show Debriefly instead.
-12. Open that placeholder question's JavaScript editor.
-13. Delete everything currently in the JavaScript editor, including the default `addOnload`, `addOnReady`, and `addOnUnload` template blocks.
-14. Paste the full code below into the now-empty editor.
-15. Replace `REPLACE_WITH_DEBRIEFLY_FORM_CODE` with your Debriefly form code.
-16. Preview the survey before sending it to respondents.
+8. In the Qualtrics survey editor, add a placeholder question where you want the Debriefly survey to appear. If your Qualtrics account has **Text / Graphic**, use that. If it does not, use any ordinary question type, such as Multiple Choice or Text Entry.
+9. Open that placeholder question's JavaScript editor. Delete everything currently in the JavaScript editor, including the default `addOnload`, `addOnReady`, and `addOnUnload` template blocks.
+10. Paste the full code below into the now-empty editor.
+11. Replace `REPLACE_WITH_DEBRIEFLY_FORM_CODE` with your Debriefly form code.
+12. Preview the survey before sending it to respondents.
 
 ```javascript
 Qualtrics.SurveyEngine.addOnload(function () {

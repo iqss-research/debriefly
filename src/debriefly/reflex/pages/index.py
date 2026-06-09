@@ -41,8 +41,47 @@ def _split_markdown_sections(markdown: str) -> tuple[str, list[tuple[str, str]]]
     return "\n".join(intro_lines).strip(), sections
 
 
+def _copyable_code_block(text: str, font_size: str, **props) -> rx.Component:
+    return rx.code_block(
+        text,
+        **props,
+        can_copy=True,
+        copy_button=rx.button(
+            "Copy",
+            on_click=rx.set_clipboard(text),
+            position="absolute",
+            top="0.75rem",
+            right="0.75rem",
+            z_index="1",
+            size="2",
+            variant="solid",
+            color_scheme="gray",
+            font_weight="bold",
+            high_contrast=True,
+            cursor="pointer",
+        ),
+        theme="light",
+        background_color="#f8fafc",
+        border="1px solid #94a3b8",
+        border_radius="8px",
+        box_shadow=styles.box_shadow_style,
+        color="#0f172a",
+        font_size=font_size,
+        line_height="1.6",
+        margin_y="1rem",
+        max_height="34rem",
+        max_width="100%",
+        overflow="auto",
+        padding="1rem 4.75rem 1rem 1rem",
+        width="100%",
+        wrap_long_lines=True,
+    )
+
+
 def _markdown_component_map() -> dict:
     text_color = rx.color("gray", 12)
+    body_font_size = "1rem"
+    body_line_height = "1.7"
 
     return {
         "h1": lambda text: rx.heading(
@@ -70,10 +109,11 @@ def _markdown_component_map() -> dict:
         "h3": lambda text: rx.heading(
             text,
             as_="h3",
-            size=rx.breakpoints(initial="4", sm="5"),
-            weight="medium",
+            size="3",
+            font_size=body_font_size,
+            weight="bold",
             color=text_color,
-            line_height="1.25",
+            line_height=body_line_height,
             margin_top="0.8em",
             margin_bottom="0.45em",
             overflow_wrap="anywhere",
@@ -81,25 +121,34 @@ def _markdown_component_map() -> dict:
         "p": lambda text: rx.text(
             text,
             as_="p",
-            size=rx.breakpoints(initial="3", sm="4"),
+            font_size=body_font_size,
             color=text_color,
-            line_height="1.7",
+            line_height=body_line_height,
             margin_y="0.85em",
             overflow_wrap="break-word",
             width="100%",
         ),
-        "ol": lambda text: rx.ordered_list(
+        "ol": lambda text, **props: rx.ordered_list(
             text,
+            **props,
+            font_size=body_font_size,
+            line_height=body_line_height,
             margin_y="0.75em",
             padding_left=["1.25rem", "1.5rem"],
         ),
-        "ul": lambda text: rx.unordered_list(
+        "ul": lambda text, **props: rx.unordered_list(
             text,
+            **props,
+            font_size=body_font_size,
+            line_height=body_line_height,
             margin_y="0.75em",
             padding_left=["1.25rem", "1.5rem"],
         ),
-        "li": lambda text: rx.list_item(
+        "li": lambda text, **props: rx.list_item(
             text,
+            **props,
+            font_size=body_font_size,
+            line_height=body_line_height,
             margin_y="0.45em",
             overflow_wrap="break-word",
         ),
@@ -107,6 +156,7 @@ def _markdown_component_map() -> dict:
             text,
             **props,
             color=styles.accent_text_color,
+            font_size="inherit",
             font_weight="bold",
             overflow_wrap="anywhere",
             text_decoration="underline",
@@ -115,19 +165,15 @@ def _markdown_component_map() -> dict:
         "code": lambda text: rx.code(
             text,
             color_scheme="gray",
+            font_size="inherit",
             max_width="100%",
             overflow_wrap="anywhere",
             white_space="pre-wrap",
         ),
-        "codeblock": lambda text, **props: rx.code_block(
+        "codeblock": lambda text, **props: _copyable_code_block(
             text,
+            body_font_size,
             **props,
-            font_size="0.82rem",
-            margin_y="1em",
-            max_width="100%",
-            overflow_x="auto",
-            width="100%",
-            wrap_long_lines=True,
         ),
     }
 
@@ -213,9 +259,9 @@ def index() -> rx.Component:
                 for index, section in enumerate(sections)
             ],
             collapsible=True,
-            default_value=[],
+            default_value="",
             show_dividers=False,
-            type="multiple",
+            type="single",
             width="100%",
         ),
         align="start",
