@@ -20,14 +20,15 @@ color_box_size = ["2.25rem", "2.25rem", "2.5rem"]
 
 
 template_page_style = {
-    "padding_top": ["1em", "1em", "2em"],
-    "padding_x": ["auto", "auto", "2em"],
+    "padding_top": ["0.75rem", "1rem", "1.5rem", "2em"],
+    "padding_x": ["0", "0", "1rem", "2em"],
 }
 
 template_content_style = {
-    "padding": "1em",
+    "padding": ["0.75rem", "1rem"],
     "margin_bottom": "2em",
     "min_height": "90vh",
+    "max_width": "100%",
 }
 
 link_style = {

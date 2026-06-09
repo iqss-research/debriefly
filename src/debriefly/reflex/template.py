@@ -2,7 +2,7 @@ import reflex as rx
 import reflex_clerk as clerk
 from debriefly.reflex import styles
 from debriefly.reflex.auth import AUTH_FALLBACK_ROUTE, SIGN_IN_ROUTE
-from debriefly.reflex.components.sidebar import sidebar
+from debriefly.reflex.components.sidebar import mobile_sidebar, sidebar
 
 
 def menu_item_link(text, href):
@@ -24,20 +24,29 @@ def template(page_content) -> rx.Component:
     return rx.theme(
         clerk.clerk_provider(
             clerk.protect(
-                rx.flex(
-                    sidebar(),
+                rx.box(
+                    mobile_sidebar(),
                     rx.flex(
-                        rx.vstack(
-                            page_content(),
+                        sidebar(),
+                        rx.flex(
+                            rx.vstack(
+                                page_content(),
+                                width="100%",
+                                **styles.template_content_style,
+                            ),
+                            flex="1 1 auto",
+                            min_width="0",
                             width="100%",
-                            **styles.template_content_style,
+                            **styles.template_page_style,
+                            max_width=[
+                                "100%",
+                            ],
                         ),
+                        align="stretch",
+                        min_height="100dvh",
                         width="100%",
-                        **styles.template_page_style,
-                        max_width=[
-                            "100%",
-                        ],
                     ),
+                    width="100%",
                 ),
                 fallback=clerk.redirect_to_sign_in(),
             ),

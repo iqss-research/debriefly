@@ -18,6 +18,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
 
   var DEBRIEFLY_BASE_URL = "https://www.debriefly.net";
   var FORM_CODE = "REPLACE_WITH_DEBRIEFLY_FORM_CODE";
+  var HIDE_QUALTRICS_PLACEHOLDER = true;
 
   var container = question.questionContainer || document.getElementById(question.questionId);
   var nextButton = document.getElementById("NextButton");
@@ -45,6 +46,27 @@ Qualtrics.SurveyEngine.addOnReady(function () {
     return cleanBaseUrl(DEBRIEFLY_BASE_URL) + "/form/" + FORM_CODE;
   }
 
+  function hideQualtricsPlaceholder() {
+    if (!HIDE_QUALTRICS_PLACEHOLDER || !container) return;
+
+    var selectors = [
+      ".QuestionText",
+      ".QuestionBody",
+      ".ChoiceStructure",
+      ".InputText",
+      "textarea",
+      "select"
+    ];
+    selectors.forEach(function (selector) {
+      Array.prototype.slice.call(container.querySelectorAll(selector)).forEach(
+        function (element) {
+          element.style.display = "none";
+        }
+      );
+    });
+  }
+
+  hideQualtricsPlaceholder();
   setEmbeddedData("debriefly_status", "started");
   if (nextButton) nextButton.style.display = "none";
 

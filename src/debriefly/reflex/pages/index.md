@@ -92,30 +92,9 @@ The chat transcript file is designed for qualitative review. You can read it dir
 
 ## Using Debriefly Inside Qualtrics
 
-Use this when you want Qualtrics to host the whole Debriefly respondent survey. Qualtrics shows one page with an iframe, and the iframe contains the Debriefly survey, including any Debriefly questions and cognitive interview chats.
+Use this option to embed a full Debriefly participant survey in one Qualtrics page. Respondents complete Debriefly inside an iframe; answers and chat transcripts stay in Debriefly, while Qualtrics stores completion markers you can use to match exports.
 
-This is different from embedding Debriefly below one Qualtrics question. In this setup, respondents answer the Debriefly survey inside the iframe, and the results live in Debriefly.
-
-This requires a Qualtrics account that allows question-level JavaScript and iframe embeds. If your Qualtrics account blocks custom JavaScript or external iframes, use the regular Debriefly participant link instead.
-
-### What The Embedded Data Fields Mean
-
-These fields are created in Qualtrics, not in Debriefly. They let Qualtrics remember whether the embedded Debriefly survey finished.
-
-`debriefly_submission_id` is the Debriefly respondent/session ID. It lets you match a Qualtrics row to a Debriefly response if you export data from both systems.
-
-`debriefly_status` tells you whether the embedded Debriefly survey started or completed.
-
-Create all four fields in Qualtrics Survey Flow, leaving their values blank:
-
-```text
-debriefly_submission_id
-debriefly_status
-__js_debriefly_submission_id
-__js_debriefly_status
-```
-
-The `__js_` versions are included because some Qualtrics accounts require JavaScript-written Embedded Data fields to use that prefix.
+This requires a Qualtrics account that allows question-level JavaScript and external iframes. If your account blocks either one, use the regular Debriefly participant link instead.
 
 ### Qualtrics Setup
 
@@ -125,7 +104,7 @@ The `__js_` versions are included because some Qualtrics accounts require JavaSc
 4. In Qualtrics, open your survey.
 5. Open **Survey Flow**.
 6. Add an **Embedded Data** element before the block where the embedded Debriefly survey will appear.
-7. Add these four fields, leaving their values blank:
+7. Add these four Embedded Data fields, leaving their values blank. The `__js_` fields support Qualtrics accounts that require a prefix for JavaScript-written values.
 
 ```text
 debriefly_submission_id
@@ -135,12 +114,14 @@ __js_debriefly_status
 ```
 
 8. Save the Survey Flow.
-9. In the Qualtrics survey editor, add a **Descriptive Text** question where you want the Debriefly survey to appear.
-10. Open that Descriptive Text question's JavaScript editor.
-11. Delete everything currently in the JavaScript editor, including the default `addOnload`, `addOnReady`, and `addOnUnload` template blocks.
-12. Paste the full code below into the now-empty editor.
-13. Replace `REPLACE_WITH_DEBRIEFLY_FORM_CODE` with your Debriefly form code.
-14. Preview the survey before sending it to respondents.
+9. In the Qualtrics survey editor, add a placeholder question where you want the Debriefly survey to appear.
+10. If your Qualtrics account has **Text / Graphic**, use that. If it does not, use any ordinary question type, such as Multiple Choice or Text Entry.
+11. Make the placeholder question **not required**. The JavaScript will hide the placeholder question content and show Debriefly instead.
+12. Open that placeholder question's JavaScript editor.
+13. Delete everything currently in the JavaScript editor, including the default `addOnload`, `addOnReady`, and `addOnUnload` template blocks.
+14. Paste the full code below into the now-empty editor.
+15. Replace `REPLACE_WITH_DEBRIEFLY_FORM_CODE` with your Debriefly form code.
+16. Preview the survey before sending it to respondents.
 
 ```javascript
 Qualtrics.SurveyEngine.addOnload(function () {
@@ -151,6 +132,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
 
   var DEBRIEFLY_BASE_URL = "https://www.debriefly.net";
   var FORM_CODE = "REPLACE_WITH_DEBRIEFLY_FORM_CODE";
+  var HIDE_QUALTRICS_PLACEHOLDER = true;
 
   var container = question.questionContainer || document.getElementById(question.questionId);
   var nextButton = document.getElementById("NextButton");
@@ -178,6 +160,27 @@ Qualtrics.SurveyEngine.addOnReady(function () {
     return cleanBaseUrl(DEBRIEFLY_BASE_URL) + "/form/" + FORM_CODE;
   }
 
+  function hideQualtricsPlaceholder() {
+    if (!HIDE_QUALTRICS_PLACEHOLDER || !container) return;
+
+    var selectors = [
+      ".QuestionText",
+      ".QuestionBody",
+      ".ChoiceStructure",
+      ".InputText",
+      "textarea",
+      "select"
+    ];
+    selectors.forEach(function (selector) {
+      Array.prototype.slice.call(container.querySelectorAll(selector)).forEach(
+        function (element) {
+          element.style.display = "none";
+        }
+      );
+    });
+  }
+
+  hideQualtricsPlaceholder();
   setEmbeddedData("debriefly_status", "started");
   if (nextButton) nextButton.style.display = "none";
 
@@ -214,18 +217,6 @@ Qualtrics.SurveyEngine.addOnUnload(function () {
 });
 ```
 
-### How To Know It Worked
-
-In Qualtrics Preview, the Debriefly survey should appear inside the Qualtrics page immediately. The Qualtrics **Next** button should be hidden while the Debriefly survey is in progress.
-
-After the respondent finishes the Debriefly survey:
-
-1. The Qualtrics **Next** button should come back.
-2. `debriefly_status` or `__js_debriefly_status` should be `complete`.
-3. `debriefly_submission_id` or `__js_debriefly_submission_id` should contain the Debriefly respondent/session ID.
-4. In Debriefly, open the form's **View Results** page to see the submitted survey answers and chat transcripts.
-
-If the iframe does not appear, first open the Debriefly participant URL directly in a browser, such as `https://www.debriefly.net/form/abc123`. If that does not work, the form code or deployment is wrong. If the direct Debriefly URL works but Qualtrics still does not show the iframe, your Qualtrics account or survey theme may be blocking custom JavaScript or external iframes.
 
 ## Reference
 
