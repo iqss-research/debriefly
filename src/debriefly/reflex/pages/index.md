@@ -1,16 +1,20 @@
-# Debriefly
+Software to implement ideas in <a href="https://GaryKing.org/debrief" target="_blank" rel="noopener noreferrer">Musashi Hinck, Gary King, Kentaro Nakamura, Brandon M. Stewart. 2026. “Where’s the Evidence that Respondents Understand Your Survey Questions?“</a>.
 
 Debriefly helps researchers improve survey questions by checking whether respondents understand each question the way the researcher intended.
 
 With Debriefly, a respondent answers your survey question and then has a short, guided conversation about what the question meant to them. Those debriefing chats can reveal confusing wording, unexpected interpretations, missing answer choices, and other issues before you rely on the data.
 
+
+First decide where respondents should answer the ordinary survey questions.
+
+- **Use Debriefly for the whole survey** if you mainly want to field questions with cognitive debriefing. Create the survey in Debriefly, turn on **Debriefing** for selected questions, share the **Copy URL** link, and review Debriefly exports.
+- **Use Qualtrics with Debriefly embedded** if you need Qualtrics features that Debriefly does not provide, such as advanced survey flow, panels, quotas, randomization, or payment workflows. Build the main survey in Qualtrics, embed the Debriefly participant survey where debriefing should happen, and ask respondents to enter the Debriefly submission code in Qualtrics or MTurk so you can merge records with Debriefly data.
+
+The **Quick Start** below covers the Debriefly-only path. **Using Debriefly Inside Qualtrics** covers the Qualtrics path.
+
 ## Quick Start
 
-### 1. Sign in
-
-Use **Sign In** or **Sign Up** in the lower-left corner of the sidebar. Debriefly saves surveys to your account, so you need to be signed in before creating or editing a survey.
-
-### 2. Add your OpenAI key
+### 1. Add your OpenAI key
 
 Open **OpenAI Key** in the sidebar, enter your OpenAI API key, enter a model name or keep the default, and click **Save**.
 
@@ -29,7 +33,7 @@ To get an OpenAI API key:
 
 Treat your API key like a password. Do not share it publicly, send it to respondents, or paste it into documents that others can access. If you lose the key or think it has been exposed, create a new key in OpenAI and remove the old one.
 
-### 3. Create a survey
+### 2. Create a survey
 
 In the **Create Survey** section of the sidebar:
 
@@ -39,7 +43,7 @@ In the **Create Survey** section of the sidebar:
 
 To return to a survey later, choose it from **Existing Surveys** in the sidebar.
 
-### 4. Add questions
+### 3. Add questions
 
 In the survey editor, click **Add Question**. In the question editor:
 
@@ -53,7 +57,7 @@ In the survey editor, click **Add Question**. In the question editor:
 
 Debriefing questions are automatically treated as required, because the chat needs the respondent's answer before it can begin.
 
-### 5. Review the survey before sharing
+### 4. Review the survey before sharing
 
 Use these controls at the top of the survey editor:
 
@@ -64,11 +68,13 @@ Use these controls at the top of the survey editor:
 
 Use the up and down arrows on each question to reorder it. You can also add **Page Break** or **Plain Text** blocks when the survey needs separate pages or instructions.
 
-### 6. Share the participant link
+### 5. Share the participant link
 
 Click **Copy URL** and send that link to respondents. Do not copy the browser address bar from the editor; that is the private editing page, not the participant survey link.
 
-### 7. Review responses
+If you turn on **Show Submission Code Page**, Debriefly shows a unique code at the end. Ask respondents to enter that code in Qualtrics or MTurk so you can merge those records with Debriefly exports.
+
+### 6. Review responses
 
 After respondents complete the survey:
 
@@ -212,8 +218,3 @@ Qualtrics.SurveyEngine.addOnReady(function () {
 Qualtrics.SurveyEngine.addOnUnload(function () {
 });
 ```
-
-
-## Reference
-
-Hinck, Musashi, King, Gary, Nakamura, Kentaro, & Stewart, Brandon M. (2026). Where's the Evidence that Respondents Understand Your Survey Questions?

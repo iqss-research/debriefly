@@ -56,7 +56,7 @@ def form_editor_page() -> rx.Component:
                             checked=FormEditorState.show_submission_code,
                             on_change=FormEditorState.set_show_submission_code,
                         ),
-                        content="Show the submission code page at last. The submission code is useful to merge data with other sources (e.g., MTurk).",
+                        content="Show a final page with a unique code respondents can enter in Qualtrics or MTurk to merge with Debriefly data.",
                     ),
                     spacing="2",
                 ),
