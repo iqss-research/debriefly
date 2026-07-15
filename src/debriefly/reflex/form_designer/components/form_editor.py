@@ -1,5 +1,6 @@
 import uuid
 import reflex as rx
+from sqlmodel import select
 from debriefly.reflex.form_designer import constants, routes, utils
 from debriefly.reflex.backend.backend import MainState as AppState
 from debriefly.reflex.form_designer.components.field_view import (
@@ -8,6 +9,43 @@ from debriefly.reflex.form_designer.components.field_view import (
 )
 from debriefly.reflex.backend.models import BundleItem, FieldType, Field, Form, Option
 from debriefly.reflex.form_designer.components.form_select import FormSelectState
+
+
+def _int_id(value: int | str | None) -> int | None:
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_owned_form(session, form_id: int | str | None, user_id: str):
+    parsed_form_id = _int_id(form_id)
+    if parsed_form_id is None or not user_id:
+        return None
+    return session.exec(
+        select(Form).where(Form.id == parsed_form_id, Form.user_id == user_id)
+    ).first()
+
+
+def _get_owned_field(
+    session,
+    field_id: int | str | None,
+    form_id: int | str | None,
+    user_id: str,
+):
+    parsed_field_id = _int_id(field_id)
+    parsed_form_id = _int_id(form_id)
+    if parsed_field_id is None or parsed_form_id is None or not user_id:
+        return None
+    return session.exec(
+        select(Field)
+        .join(Form, Field.form_id == Form.id)
+        .where(
+            Field.id == parsed_field_id,
+            Field.form_id == parsed_form_id,
+            Form.user_id == user_id,
+        )
+    ).first()
 
 
 def field_type_value(field: Field) -> str:
@@ -58,8 +96,8 @@ class FormEditorState(AppState):
 
     def load_form_by_id(self, id_: int):
         with rx.session() as session:
-            form = session.get(Form, id_)
-            if not self._user_has_access(form) or form is None:
+            form = _get_owned_form(session, id_, self.user_id)
+            if form is None:
                 self.form = self._new_form()
                 return
             self.form = form
@@ -71,7 +109,10 @@ class FormEditorState(AppState):
             if not self._user_has_access():
                 return
             with rx.session() as session:
-                session.delete(session.get(Form, self.form.id))
+                form = _get_owned_form(session, self.form.id, self.user_id)
+                if form is None:
+                    return
+                session.delete(form)
                 session.commit()
                 yield FormSelectState.refresh_forms
                 yield rx.redirect(routes.FORM_EDIT_NEW)
@@ -80,10 +121,14 @@ class FormEditorState(AppState):
         if not self._user_has_access():
             return
         with rx.session() as session:
-            self.form.name = name
-            session.add(self.form)
+            form = _get_owned_form(session, self.form.id, self.user_id)
+            if form is None:
+                return
+            form.name = name
+            session.add(form)
             session.commit()
-            session.refresh(self.form)
+            session.refresh(form)
+            self.form = form
             yield FormSelectState.refresh_forms
             if self.form.id > 0:
                 return rx.redirect(routes.edit_form(self.form.id))
@@ -95,45 +140,54 @@ class FormEditorState(AppState):
         field.pop("bundle_items", None)  # Remove relationship
         field = Field(**field)
         with rx.session() as session:
-            session.add(self.form)
-            session.commit()
+            form = _get_owned_form(session, self.form.id, self.user_id)
+            if form is None:
+                return
             if field.id is None:
                 # Assign the next ordering value for new fields
-                field.ordering = self._next_field_ordering(self.form.fields)
-                self.form.fields.append(field)
+                field.form_id = form.id
+                field.ordering = self._next_field_ordering(form.fields)
+                form.fields.append(field)
                 session.add(field)
-                session.add(self.form)
-                session.commit()
+                session.add(form)
             else:
-                for existing_field in self.form.fields:
-                    if existing_field.id == field.id:
-                        existing_field.name = field.name
-                        existing_field.type_ = field.type_
-                        existing_field.required = field.required
-                        existing_field.bundled = field.bundled
-                        existing_field.debriefing = field.debriefing
-                        existing_field.allow_back = field.allow_back
-                        existing_field.prompt = field.prompt
-                        existing_field.custom_system_message = (
-                            field.custom_system_message
-                        )
-                        existing_field.custom_initial_message = (
-                            field.custom_initial_message
-                        )
-                        existing_field.ordering = field.ordering
-                        existing_field.min_debriefing_time = field.min_debriefing_time
-                        existing_field.max_debriefing_time = field.max_debriefing_time
-                        existing_field.scale_min = field.scale_min
-                        existing_field.scale_max = field.scale_max
-                        session.add(existing_field)
-                        session.commit()
+                existing_field = _get_owned_field(
+                    session, field.id, form.id, self.user_id
+                )
+                if existing_field is None:
+                    return
+                existing_field.name = field.name
+                existing_field.type_ = field.type_
+                existing_field.required = field.required
+                existing_field.bundled = field.bundled
+                existing_field.debriefing = field.debriefing
+                existing_field.interviewer_mode = field.interviewer_mode
+                existing_field.allow_back = field.allow_back
+                existing_field.prompt = field.prompt
+                existing_field.custom_system_message = field.custom_system_message
+                existing_field.custom_initial_message = field.custom_initial_message
+                existing_field.ordering = field.ordering
+                existing_field.min_debriefing_time = field.min_debriefing_time
+                existing_field.max_debriefing_time = field.max_debriefing_time
+                existing_field.scale_min = field.scale_min
+                existing_field.scale_max = field.scale_max
+                session.add(existing_field)
+            session.commit()
             return FormEditorState.load_form_by_id(self.form.id)
 
     def delete_field(self, field_id):
         if not self._user_has_access():
             return
         with rx.session() as session:
-            session.delete(session.get(Field, field_id))
+            field = _get_owned_field(
+                session,
+                field_id=field_id,
+                form_id=self.form.id,
+                user_id=self.user_id,
+            )
+            if field is None:
+                return
+            session.delete(field)
             session.commit()
             return FormEditorState.load_form_by_id(self.form.id)
 
@@ -145,8 +199,8 @@ class FormEditorState(AppState):
         from debriefly.reflex.backend.models import Field, FieldType
 
         with rx.session() as session:
-            form = session.get(Form, self.form.id)
-            if form is None or not self._user_has_access(form):
+            form = _get_owned_form(session, self.form.id, self.user_id)
+            if form is None:
                 return []
 
             # Create the new field with default values
@@ -171,8 +225,8 @@ class FormEditorState(AppState):
             return []
 
         with rx.session() as session:
-            form = session.get(Form, self.form.id)
-            if form is None or not self._user_has_access(form):
+            form = _get_owned_form(session, self.form.id, self.user_id)
+            if form is None:
                 return []
 
             if not self._move_field(form.fields, field_id, -1):
@@ -190,8 +244,8 @@ class FormEditorState(AppState):
             return []
 
         with rx.session() as session:
-            form = session.get(Form, self.form.id)
-            if form is None or not self._user_has_access(form):
+            form = _get_owned_form(session, self.form.id, self.user_id)
+            if form is None:
                 return []
 
             if not self._move_field(form.fields, field_id, 1):
@@ -205,7 +259,7 @@ class FormEditorState(AppState):
 
     async def create_new_survey(self, name: str):
         """Create a new survey with the given name and redirect to its edit page."""
-        if not self._user_has_access():
+        if not self.is_authenticated or not self.user_id:
             return
         with rx.session() as session:
             new_form = Form(name=name, user_id=self.user_id, code=uuid.uuid4().hex)
@@ -223,7 +277,7 @@ class FormEditorState(AppState):
 
         with rx.session() as session:
             # Retrieve the current form
-            original_form = session.get(Form, self.form_id)
+            original_form = _get_owned_form(session, self.form_id, self.user_id)
             if original_form is None:
                 yield rx.toast.error("Survey not found.")
                 return
@@ -249,6 +303,7 @@ class FormEditorState(AppState):
                     required=field.required,
                     bundled=field.bundled,
                     debriefing=field.debriefing,
+                    interviewer_mode=field.interviewer_mode,
                     allow_back=field.allow_back,
                     min_debriefing_time=field.min_debriefing_time,
                     max_debriefing_time=field.max_debriefing_time,
@@ -292,10 +347,14 @@ class FormEditorState(AppState):
     def set_show_submission_code(self, value: bool):
         """Update the show_submission_code state and the form in the database."""
         with rx.session() as session:
-            self.form.show_submission_code = value
-            session.add(self.form)
+            form = _get_owned_form(session, self.form.id, self.user_id)
+            if form is None:
+                return
+            form.show_submission_code = value
+            session.add(form)
             session.commit()
-            session.refresh(self.form)
+            session.refresh(form)
+            self.form = form
             self.show_submission_code = value  # Sync the state variable
 
     def set_page_break_allow_back(self, field_id: int, value: bool):
@@ -304,12 +363,8 @@ class FormEditorState(AppState):
             return
 
         with rx.session() as session:
-            field = session.get(Field, field_id)
-            if (
-                field is None
-                or field.form_id != self.form.id
-                or field_type_value(field) != FieldType.pagebreak.value
-            ):
+            field = _get_owned_field(session, field_id, self.form.id, self.user_id)
+            if field is None or field_type_value(field) != FieldType.pagebreak.value:
                 return
 
             field.allow_back = value

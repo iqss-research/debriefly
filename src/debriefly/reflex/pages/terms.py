@@ -1,13 +1,11 @@
 import reflex as rx
 from pathlib import Path
 from debriefly.reflex.form_designer import style
-from debriefly.reflex.backend.backend import MainState
 
 
 @rx.page(
     route="/terms",
     title="Terms of Service",
-    on_load=MainState.init,
 )
 def terms_of_service() -> rx.Component:
     terms_content = (

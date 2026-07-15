@@ -1,8 +1,7 @@
 import reflex as rx
-import reflex_clerk as clerk
 from datetime import datetime, timezone
-from debriefly.reflex.auth import AUTH_FALLBACK_ROUTE, SIGN_IN_ROUTE
 from debriefly.reflex.backend.backend import MainState
+from debriefly.reflex.backend.models import User
 
 import logging
 
@@ -23,18 +22,17 @@ class ConsentState(MainState):
             return rx.redirect("/")
 
     async def confirm(self):
-        await self.load_user()
-
-        if not self.user_id:
-            return rx.toast.error(
-                "Still loading your account – please click confirm again in a moment."
-            )
-
-        self.user.tos_version = self.TOS_VERSION
-        self.user.tos_accepted_at = datetime.now(timezone.utc)
-
+        if not await self.sync_user_from_session():
+            return rx.redirect("/signin")
+        accepted_at = datetime.now(timezone.utc)
         with rx.session() as s:
-            s.merge(self.user)  # upsert
+            user = s.get(User, self.user_id)
+            if user is None:
+                return rx.redirect("/signin")
+            user.tos_version = self.TOS_VERSION
+            user.tos_accepted_at = accepted_at
+            user.updated_at = accepted_at
+            s.add(user)
             s.commit()
 
         return rx.redirect("/")
@@ -69,9 +67,4 @@ def consent() -> rx.Component:
         min_h="100vh",
     )
 
-    return clerk.clerk_provider(
-        clerk.protect(content, fallback=clerk.redirect_to_sign_in()),
-        sign_in_url=SIGN_IN_ROUTE,
-        sign_in_fallback_redirect_url=AUTH_FALLBACK_ROUTE,
-        sign_up_fallback_redirect_url=AUTH_FALLBACK_ROUTE,
-    )
+    return content

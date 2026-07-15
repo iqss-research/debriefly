@@ -7,6 +7,7 @@ from enum import Enum as PyEnum
 import sqlmodel
 import json
 from reflex.utils.serializers import serializer
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.exc import OperationalError
 from debriefly.openai import DEFAULT_OPENAI_MODEL
 
@@ -27,9 +28,158 @@ class Config(rx.Model, table=True):
 
 
 class User(rx.Model, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "email_normalized",
+            name="uq_user_email_normalized",
+        ),
+    )
+
     user_id: str = Field(primary_key=True)
+    email_normalized: str | None = None
+    email_verified_at: datetime | None = None
+    status: str = "active"
+    role: str = "user"
+    auth_version: int = 1
+    created_at: datetime | None = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime(timezone=True),
+            nullable=True,
+        ),
+    )
+    updated_at: datetime | None = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime(timezone=True),
+            nullable=True,
+        ),
+    )
     tos_version: str | None = None
     tos_accepted_at: datetime | None = None
+
+
+class UserIdentity(rx.Model, table=True):
+    """Map an external identity to Debriefly's stable internal user ID."""
+
+    __tablename__ = "user_identity"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "issuer",
+            "subject",
+            name="uq_user_identity_provider_issuer_subject",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "issuer",
+            name="uq_user_identity_user_provider_issuer",
+        ),
+    )
+
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    user_id: str = sqlmodel.Field(
+        foreign_key="user.user_id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    provider: str = "clerk"
+    issuer: str
+    subject: str
+    email: str | None = None
+    email_normalized: str | None = None
+    email_verified_at: datetime | None = None
+    link_source: str = "import"
+    created_at: datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime(timezone=True),
+            nullable=False,
+        ),
+    )
+
+
+class LocalCredential(rx.Model, table=True):
+    """Local login material, deliberately separate from serialized User state."""
+
+    __tablename__ = "local_credential"
+
+    user_id: str = sqlmodel.Field(
+        primary_key=True,
+        foreign_key="user.user_id",
+        ondelete="CASCADE",
+    )
+    # NULL means the imported user must consume a password-setup token.
+    password_hash: str | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=True),
+    )
+    password_changed_at: datetime | None = None
+    failed_attempts: int = 0
+    locked_until: datetime | None = None
+
+
+class AuthSession(rx.Model, table=True):
+    """Revocable server-side session; only a digest of the cookie is stored."""
+
+    __tablename__ = "auth_session"
+    __table_args__ = (
+        UniqueConstraint("token_digest", name="uq_auth_session_token_digest"),
+    )
+
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    user_id: str = sqlmodel.Field(
+        foreign_key="user.user_id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    token_digest: str
+    auth_version: int
+    created_at: datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime(timezone=True),
+            nullable=False,
+        ),
+    )
+    last_seen_at: datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime(timezone=True),
+            nullable=False,
+        ),
+    )
+    expires_at: datetime = sqlmodel.Field(index=True)
+    revoked_at: datetime | None = None
+
+
+class AuthToken(rx.Model, table=True):
+    """One-time email verification, password setup, or reset token."""
+
+    __tablename__ = "auth_token"
+    __table_args__ = (
+        UniqueConstraint("token_digest", name="uq_auth_token_token_digest"),
+    )
+
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    user_id: str = sqlmodel.Field(
+        foreign_key="user.user_id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    purpose: str
+    token_digest: str
+    email_normalized: str | None = None
+    created_at: datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime(timezone=True),
+            nullable=False,
+        ),
+    )
+    expires_at: datetime = sqlmodel.Field(index=True)
+    used_at: datetime | None = None
 
 
 class UserOpenAISettings(rx.Model, table=True):
@@ -106,6 +256,7 @@ class Field(rx.Model, table=True):
     required: bool = False
     bundled: bool = False
     debriefing: bool = False
+    interviewer_mode: bool = False
     allow_back: bool = False
     min_debriefing_time: Optional[int] = None
     max_debriefing_time: Optional[int] = None
@@ -224,6 +375,23 @@ class Response(rx.Model, table=True):
 
     field_values: list[FieldValue] = sqlmodel.Relationship(
         sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete"}
+    )
+
+
+class HumanChatMessage(rx.Model, table=True):
+    __tablename__ = "human_chat_message"
+
+    id: int = sqlmodel.Field(primary_key=True)
+    field_value_id: int = sqlmodel.Field(foreign_key="fieldvalue.id", index=True)
+    # role: "context" (initial context for researcher), "user" (respondent), "interviewer" (researcher)
+    role: str
+    content: str = sqlmodel.Field(
+        sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=False)
+    )
+    end_chat: bool = False
+    created_at: datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=sqlmodel.Column(sqlmodel.DateTime(timezone=True), nullable=False),
     )
 
 

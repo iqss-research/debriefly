@@ -11,6 +11,8 @@ FEEDBACK = "/feedback"
 TERMS = "/terms"
 PRIVACY = "/privacy"
 ADMIN = "/admin"
+INTERVIEW_LIST = "/interview"
+INTERVIEW_SESSION = "/interview/[interview_session_id]"
 
 
 def edit_form(form_id: int | str):
@@ -31,3 +33,7 @@ def form_responses(form_id: int | str):
 
 def form_responses_analyze(form_id: int | str):
     return f"/responses/{form_id}/analyze"
+
+
+def interview_session(field_value_id: int | str):
+    return f"/interview/{field_value_id}"

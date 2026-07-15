@@ -1,13 +1,11 @@
 import reflex as rx
 from pathlib import Path
 from debriefly.reflex.form_designer import style
-from debriefly.reflex.backend.backend import MainState
 
 
 @rx.page(
     route="/privacy",
     title="Privacy Statement",
-    on_load=MainState.init,
 )
 def privacy_statement() -> rx.Component:
     privacy_content = (

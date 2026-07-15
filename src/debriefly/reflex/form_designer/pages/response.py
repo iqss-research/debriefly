@@ -17,6 +17,44 @@ from debriefly.reflex.backend.backend import MainState as AppState
 
 logger = logging.getLogger(__name__)
 
+
+def _int_id(value: int | str | None) -> int | None:
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_owned_form(session, form_id: int | str | None, user_id: str):
+    parsed_form_id = _int_id(form_id)
+    if parsed_form_id is None or not user_id:
+        return None
+    return session.exec(
+        select(Form).where(Form.id == parsed_form_id, Form.user_id == user_id)
+    ).first()
+
+
+def _get_owned_response(
+    session,
+    response_id: int | str | None,
+    form_id: int | str | None,
+    user_id: str,
+):
+    parsed_response_id = _int_id(response_id)
+    parsed_form_id = _int_id(form_id)
+    if parsed_response_id is None or parsed_form_id is None or not user_id:
+        return None
+    return session.exec(
+        select(Response)
+        .join(Form, Response.form_id == Form.id)
+        .where(
+            Response.id == parsed_response_id,
+            Response.form_id == parsed_form_id,
+            Form.user_id == user_id,
+        )
+    ).first()
+
+
 message_style = dict(
     display="inline-block",
     padding="1em",
@@ -89,7 +127,7 @@ class ResponsesState(AppState):
         if self.form_id == "":
             return False
         with rx.session() as session:
-            form = session.get(Form, self.form_id)
+            form = _get_owned_form(session, self.form_id, self.user_id)
             if form is None:
                 return False
             return form.index_is_current()
@@ -99,7 +137,7 @@ class ResponsesState(AppState):
         if self.form_id == "":
             return False
         with rx.session() as session:
-            form = session.get(Form, self.form_id)
+            form = _get_owned_form(session, self.form_id, self.user_id)
             if form is None:
                 return False
             return form.index_is_available()
@@ -133,7 +171,9 @@ class ResponsesState(AppState):
             else:
                 logger.info(f"Starting indexing for form {self.form_id}")
                 with rx.session() as session:
-                    form = session.get(Form, self.form_id)
+                    form = _get_owned_form(session, self.form_id, self.user_id)
+                    if form is None:
+                        return rx.toast.error("Survey not found.")
                     form.index()
                     session.add(form)
                     session.commit()
@@ -143,12 +183,13 @@ class ResponsesState(AppState):
 
     def load_responses(self):
         with rx.session() as session:
+            self.form = Form()
+            self.responses = []
             self.response_debriefings = {}  # reset debriefings
             self.qualtrics_debriefings = {}
             self.qualtrics_embed_sessions = []
-            form = session.get(Form, self.form_id)
-            if not self._user_has_access(form) or form is None:
-                self.form = Form()
+            form = _get_owned_form(session, self.form_id, self.user_id)
+            if form is None:
                 return
             self.form = form
             self.responses = session.exec(
@@ -177,14 +218,24 @@ class ResponsesState(AppState):
             }
 
     def delete_response(self, id: int):
-        if not self._user_has_access():
-            return
         with rx.session() as session:
-            session.delete(session.get(Response, id))
+            response = _get_owned_response(
+                session,
+                response_id=id,
+                form_id=self.form_id,
+                user_id=self.user_id,
+            )
+            if response is None:
+                return
+            session.delete(response)
             session.commit()
             return ResponsesState.load_responses
 
     def download(self):
+        self.load_responses()
+        if not self._user_has_access():
+            return rx.toast.error("Survey not found.")
+
         fields = [
             f
             for f in self.form.fields
@@ -243,6 +294,10 @@ class ResponsesState(AppState):
             )
 
     def download_transcripts(self):
+        self.load_responses()
+        if not self._user_has_access():
+            return rx.toast.error("Survey not found.")
+
         transcript_text = ""
         for response in self.responses:
             transcript_text += f"--- Response {response.client_token} ---\n\n"

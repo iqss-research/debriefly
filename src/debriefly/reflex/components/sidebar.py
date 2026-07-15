@@ -1,5 +1,4 @@
 import reflex as rx
-import reflex_clerk as clerk
 from debriefly import __version__
 from debriefly.reflex import styles
 from debriefly.reflex.form_designer.components.form_select import (
@@ -12,20 +11,22 @@ from debriefly.reflex.form_designer import routes
 import uuid
 from debriefly.reflex.backend.models import Form
 from debriefly.reflex.backend.backend import MainState
+from debriefly.reflex.local_auth import auth_api_endpoint
 
 
 def info_footer() -> rx.Component:
     return rx.vstack(
-        rx.hstack(
-            clerk.signed_out(
-                clerk.sign_in_button(rx.button("Sign In")),
-                clerk.sign_up_button(rx.button("Sign Up")),
+        rx.el.form(
+            rx.button(
+                rx.icon("log-out", size=16),
+                "Sign out",
+                type="submit",
+                variant="outline",
+                width="100%",
             ),
-            clerk.signed_in(
-                rx.box(
-                    clerk.user_button(),
-                )
-            ),
+            action=auth_api_endpoint("logout"),
+            method="post",
+            width="100%",
         ),
         rx.text(
             f"v{__version__} | ",
@@ -44,12 +45,17 @@ def info_footer() -> rx.Component:
                 color=styles.text_color,
                 _hover={"color": styles.accent_text_color},
             ),
-            " | ",  # Separator
-            rx.link(
-                "Admin Login",
-                href="/admin",
-                color=styles.text_color,
-                _hover={"color": styles.accent_text_color},
+            rx.cond(
+                MainState.is_admin,
+                rx.fragment(
+                    " | ",
+                    rx.link(
+                        "Admin",
+                        href="/admin",
+                        color=styles.text_color,
+                        _hover={"color": styles.accent_text_color},
+                    ),
+                ),
             ),
             size="1",  # Ensures very small font
             width="100%",
@@ -209,6 +215,9 @@ def _sidebar_content(
             spacing="1",
             width="100%",  # Ensure full width
         ),
+        maybe_close(
+            sidebar_item("Interview Sessions", "/interview", "messages-square")
+        ),
         maybe_close(sidebar_item("Feedback", "/feedback", "message_square")),
         maybe_close(sidebar_item("OpenAI Key", "/user", "key")),
         rx.spacer(),
@@ -323,6 +332,9 @@ class SidebarState(MainState):
         self.new_survey_name = value
 
     async def create_new_survey(self):
+        if not await self.sync_user_from_session():
+            yield rx.toast.error("Please sign in before creating a survey.")
+            return
         if self.new_survey_name:
             with rx.session() as session:
                 new_form = Form(
@@ -338,6 +350,9 @@ class SidebarState(MainState):
             self.new_survey_name = ""
 
     async def delete_survey(self, form_id: int):
+        if not await self.sync_user_from_session():
+            yield rx.toast.error("Please sign in before deleting a survey.")
+            return
         with rx.session() as session:
             form = session.get(Form, form_id)
             if form and form.user_id == self.user_id:

@@ -1,0 +1,45 @@
+# Build this image before the local-auth cutover and keep its immutable digest.
+# It retains the released Clerk application while teaching Alembic about the
+# additive schema revisions that the local-auth release applies.
+ARG CLERK_BASE_IMAGE
+FROM ${CLERK_BASE_IMAGE}
+
+ARG CLERK_BASE_IMAGE
+LABEL org.opencontainers.image.title="Debriefly Clerk rollback image" \
+      org.opencontainers.image.description="Clerk 0.8.0 with the current additive Alembic chain" \
+      debriefly.rollback.base-image="${CLERK_BASE_IMAGE}" \
+      debriefly.rollback.schema-head="f6b7c8d9e0a1"
+
+WORKDIR /app
+
+# The rollback must use the same shared production database as the candidate.
+ENV DEBRIEFLY_REQUIRE_DATABASE_URL=true
+
+# Refuse an arbitrary or already-local-auth base even when it is digest-pinned.
+RUN grep -Fq '__version__ = "0.8.0"' /app/src/debriefly/__init__.py && \
+    grep -Fq 'import reflex_clerk as clerk' /app/src/debriefly/reflex/__init__.py && \
+    python3 -c 'import reflex_clerk'
+
+# COPY merges these reviewed revisions over the migration directory in the
+# released image. Application source and its Clerk authentication remain from
+# CLERK_BASE_IMAGE. The configuration helper fixes 0.8.0's DB_URL precedence
+# bug, so this image cannot silently fall back to a pod-local SQLite database.
+COPY alembic/ /app/alembic/
+COPY alembic.ini /app/alembic.ini
+COPY rxconfig.py /app/rxconfig.py
+COPY src/debriefly/database.py /app/src/debriefly/database.py
+COPY scripts/check_migration_head.py /app/scripts/check_migration_head.py
+COPY scripts/apply_schema_migrations.py /app/scripts/apply_schema_migrations.py
+
+# Guard against accidentally building from a context that omits the local-auth
+# migration.  The shell command below deliberately fails the container startup
+# when a migration fails; the original 0.8.0 CMD masked that failure via `||`.
+RUN test -f /app/alembic/versions/f6b7c8d9e0a1_add_local_auth_schema.py && \
+    test -f /app/alembic.ini && \
+    test -f /app/scripts/apply_schema_migrations.py && \
+    python3 /app/scripts/check_migration_head.py f6b7c8d9e0a1
+
+CMD set -eu; \
+    python3 scripts/apply_schema_migrations.py; \
+    python3 scripts/seed_data.py; \
+    exec reflex run --env prod

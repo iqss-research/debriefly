@@ -1,0 +1,96 @@
+name: build Clerk rollback image
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Reviewed Debriefly release tag containing the migration"
+        required: true
+        default: "0.9.0"
+        type: string
+      clerk_base_image:
+        description: "Immutable Clerk image, including @sha256:<64 hex characters>"
+        required: true
+        type: string
+      output_tag:
+        description: "Docker Hub tag for the prepared rollback image"
+        required: true
+        default: "0.9.0-clerk-rollback"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      checkout_ref: ${{ inputs.release_tag }}
+
+  docker:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the reviewed release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+
+      - name: Validate pinned inputs and migration head
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          CLERK_BASE_IMAGE: ${{ inputs.clerk_base_image }}
+          OUTPUT_TAG: ${{ inputs.output_tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_tag must be an X.Y.Z release tag" >&2
+            exit 1
+          fi
+          if [[ ! "$CLERK_BASE_IMAGE" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
+            echo "clerk_base_image must end with an immutable sha256 digest" >&2
+            exit 1
+          fi
+          if [[ ! "$OUTPUT_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "output_tag is not a valid container tag" >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          test "$(git tag --points-at HEAD --list "$RELEASE_TAG")" = "$RELEASE_TAG"
+          python3 scripts/check_release_version.py "$RELEASE_TAG"
+          python3 scripts/check_migration_head.py f6b7c8d9e0a1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push the Clerk rollback image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.clerk-rollback
+          build-args: |
+            CLERK_BASE_IMAGE=${{ inputs.clerk_base_image }}
+          push: true
+          tags: ${{ vars.DOCKERHUB_USERNAME }}/debriefly:${{ inputs.output_tag }}
+
+      - name: Record the immutable rollback digest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          OUTPUT_TAG: ${{ inputs.output_tag }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+        run: |
+          {
+            echo "## Prepared Clerk rollback image"
+            echo
+            echo "Tag: \`${DOCKERHUB_USERNAME}/debriefly:${OUTPUT_TAG}\`"
+            echo
+            echo "Digest: \`${IMAGE_DIGEST}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

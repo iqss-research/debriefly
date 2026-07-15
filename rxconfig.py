@@ -1,21 +1,27 @@
-import sys
 import os
+import sys
+
 import dotenv
 import reflex as rx
 
 sys.path.append("src")
 
+from debriefly.database import database_url_from_env  # noqa: E402
+
 dotenv.load_dotenv()
-db_user, db_pass, db_name, db_host = (
-    os.getenv("DB_USER"),
-    os.getenv("DB_PASS"),
-    os.getenv("DB_NAME"),
-    os.getenv("DB_HOST"),
+db_url = database_url_from_env(os.environ)
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "AUTH_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
+
+config = rx.Config(
+    app_name="debriefly",
+    db_url=db_url,
+    cors_allowed_origins=allowed_origins,
 )
-db_url = os.getenv("DB_URL") or f"postgresql://{db_user}:{db_pass}@{db_host}/{db_name}"
-
-# Fall back on sqlite if we got nothing
-if db_url is None or db_name is None:
-    db_url = "sqlite:///debriefly.db"
-
-config = rx.Config(app_name="debriefly", db_url=db_url)

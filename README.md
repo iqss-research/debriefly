@@ -71,12 +71,11 @@ Once `uv` is installed:
 
 ## Running the application
 
-1. Copy the file `.env.sample` as `.env` in the same folder. Change the values in the `.env` file that are marked as placeholders, with values as `XXXX..`.
-
-   In particular, you will need the real values of `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. Get these values from someone on the `debriefly` development team.
-If you're comfortable with setting up a new project on [Clerk](https://www.clerk.dev/), you can create a new project and get the keys yourself.
+1. Copy `.env.sample` to `.env` and configure local authentication and SMTP. Generate `AUTH_SECRET_KEY` with `openssl rand -hex 32`; do not reuse a database password or an old provider secret. Local Reflex development uses frontend port 3000 and backend port 8000, as shown in the sample.
 
     **Never commit the `.env` file to the repository**.
+
+   Existing deployments moving away from Clerk must follow the staged [local-auth migration runbook](docs/local-auth-migration.md). Do not deploy the cutover before its dry-run import is conflict-free.
 
 
 2. In the *activated virtual environment* (see the Installation section above), run the following bash helper script to start the application:
@@ -133,138 +132,82 @@ It is important for you to add any such files to the repository, since these wil
 
 ## Deployment
 
-### Push image to DockerHub
+Production authentication changes require the staged backup, schema migration,
+user import, cutover, verification, and rollback procedure in
+[the local-auth migration runbook](docs/local-auth-migration.md). Do not switch
+the production image before that runbook's dry run is conflict-free.
 
-Once your branch is merged to `main` and you want to do a new "release" on the server:
+### Build and publish an image
 
-1. Pull the `main` branch and update the files `debriefly/src/debriefly/__init__.py` and `pyproject.toml` to update the version. Use the `X.Y.Z` syntax. Make sure you have identical versions specified in both these files. For bug fixes and minor changes, increment the patch version `Z`. For new features, increment the minor version `Y`. For breaking changes, increment the major version `X`.
-   ```
-   git pull origin main
-   vi debriefly/src/debriefly/__init__.py (make changes)
-   vi pyproject.toml (make changes)
-   ```
+1. Merge the reviewed release into `main`. The release worktree must be clean,
+   and all generated Alembic revisions must be reviewed and committed.
+2. Update the same `X.Y.Z` version in `src/debriefly/__init__.py` and
+   `pyproject.toml`.
+3. Run the full test suite and
+   `python3 scripts/check_migration_head.py f6b7c8d9e0a1`.
+4. Tag the merged `main` commit with that exact version and push the tag. The
+   `deploy` workflow reruns the full tests and rejects a tag whose commit is not
+   contained in `main` or whose name differs from the application version.
+5. Confirm in GitHub Actions that the Docker build completed rather than being
+   skipped, and record the resulting immutable `sha256` digest. Never deploy a
+   tag merely because its name exists in GitHub or Docker Hub.
 
+### Import and deploy on OpenShift
 
-2. Add the changes to the repository, commit them and tag the commit with the *same* version as in the step above.
-   ```
-   git add debriefly/src/debriefly/__init__.py
-   git commit -m"Update version to 0.4.7"
-   git tag 0.4.7
-   ```
+The NERC resources currently use the names `debriefly-dockerhub` for both the
+ImageStream and Deployment. Replace the project, Docker Hub account, and version
+placeholders below:
 
-3. Push the commit and tags upstream.
-   ```
-   git push
-   git push --tags
-   ```
+```sh
+oc project <project>
 
-   This step triggers a `deploy` workflow on GitHub that builds and deploys a containerized version of the application to DockerHub. Check it out in the `Actions` tab of the repository.
-   Make sure it completes successfully.
+oc import-image debriefly-dockerhub:<version> \
+  --from=docker.io/<dockerhub-account>/debriefly:<version> \
+  --confirm
 
+oc get istag/debriefly-dockerhub:<version> -o yaml
+```
 
-4. In the logs of the `deploy` workflow (click on the gear icon and then \"View raw logs\"), locate the string `containerimage.digest` and make a note of the sha256 value. You will need this later. For example, if the line says:
-   ```
-   2025-03-27T17:45:28.9415364Z   "containerimage.digest": "sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19",
-   ```
-   Copy the part `sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19` and save it for later.
+Do not hand-edit an ImageStream's `status` section. OpenShift owns that status;
+`oc import-image` creates or refreshes the ImageStreamTag safely.
 
-### Pull images on Openshift
+Before changing the Deployment, record its current image and configuration:
 
-Note that there are technically [easier ways](https://crc.dev/docs/introducing/) to do the following, and ways to automate this process. However, the following instructions have been tested out and guaranteed to work.
+```sh
+umask 077
+oc get deployment/debriefly-dockerhub -o yaml > pre-cutover-deployment.yaml
+oc get deployment/debriefly-dockerhub \
+  -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"="}{.image}{"\n"}{end}'
+oc get pods \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.containerStatuses[*]}{.name}{"="}{.imageID}{" "}{end}{"\n"}{end}'
+```
 
-1. Login to the [NERC Openshift Platform](https://console.apps.shift.nerc.mghpcc.org/)
+The Deployment YAML records Secret references, not decoded Secret values. Keep
+all pre-cutover runtime Secrets, including Clerk and any Azure settings,
+attached or preserved in the approved secret manager until the rollback window
+closes.
 
+For an ordinary release, select the imported tag under **Deployment -> Edit
+Deployment -> Images**. For an authentication migration, first complete the
+maintenance-window final export and one-off import in the migration runbook,
+then set the candidate by immutable digest:
 
-2. One the left hand menu, go to `Project` and then click on `1 Deployment` on the right hand panel. The URL will look something like `https://console.apps.shift.nerc.mghpcc.org/../automated-cognitive-debriefing-6e6c7f/deployments`
+```sh
+oc set image deployment/debriefly-dockerhub \
+  <container-name>=docker.io/<dockerhub-account>/debriefly@sha256:<candidate-digest>
+```
 
+Monitor every rollout:
 
-3. Change the `/deployments` in the address bar to `/imagestreams` and hit enter. *If you find an easier way to get to this URL, please update these instructions.*
+```sh
+oc rollout status deployment/debriefly-dockerhub
+oc logs deployment/debriefly-dockerhub --since=10m
+```
 
-
-4. Go to the ImageStream called `debriefly-dockerhub` by click on it. Click on `YAML` to make tweaks to the YAML.
-
-
-5. **Be very careful** at this point. This step involves editing a YAML file and you don't want to make mistakes and bring down the whole system!
-
-
-6. Under `spec` -> `tags`, locate a section of the YAML that looks like follows. Navigate to last such section, which should correspond to the latest available version of the application on NERC. For example:
-    ```
-    - name: 0.4.6
-      annotations: null
-      from:
-        kind: DockerImage
-        name: 'docker.io/vineetbansal/debriefly:0.4.6'
-      generation: 21
-      importPolicy:
-        importMode: Legacy
-      referencePolicy:
-        type: Source
-    ```
-
-
-7. Copy over the section and paste it right below it. Update the 2 `name` fields to point to the version of the application that you deployed on DockerHub. Increment the `generation` by 1. For the example above, it will now look like:
-    ```
-    - name: 0.4.6
-      annotations: null
-      from:
-        kind: DockerImage
-        name: 'docker.io/vineetbansal/debriefly:0.4.6'
-      generation: 21
-      importPolicy:
-        importMode: Legacy
-      referencePolicy:
-        type: Source
-    - name: 0.4.7
-      annotations: null
-      from:
-        kind: DockerImage
-        name: 'docker.io/vineetbansal/debriefly:0.4.7'
-      generation: 22
-      importPolicy:
-        importMode: Legacy
-      referencePolicy:
-        type: Source
-    ```
-
-
-6. Under `status` -> `tags`, locate a section of the YAML that looks like follows. Navigate to last such section, which should correspond to the latest available version of the application on NERC. For example:
-    ```
-    - tag: 0.4.6
-      items:
-        - created: '2025-03-25T22:20:44Z'
-          dockerImageReference: 'docker.io/vineetbansal/debriefly@sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
-          image: 'sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
-          generation: 21
-    ```
-
-
-7. Copy over the section and paste it right below it. Update the `tag` fields to point to the version of the application that you deployed on DockerHub. Update the 2 `sha256:..` occurrences to match the `sha256:..` string that you copied in the `Push image to DockerHub` section. Increment the `generation` so it matches the one you created a couple of steps ago. For the example above, it will now look like:
-    ```
-    - tag: 0.4.6
-      items:
-        - created: '2025-03-25T22:20:44Z'
-          dockerImageReference: 'docker.io/vineetbansal/debriefly@sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
-          image: 'sha256:739c7f0650c34b58ac51b79abc26e61f0aa1b8034f89481955b345cc333d7504'
-          generation: 21
-    - tag: 0.4.7
-      items:
-        - created: '2025-03-25T22:20:44Z'
-          dockerImageReference: 'docker.io/vineetbansal/debriefly@sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19'
-          image: 'sha256:cd623290cea89e38f66a98526a243d4c8dea17c1d4e654003f5f2e392d11de19'
-          generation: 22
-    ```
-
-
-8. Hit `Save`.
-
-
-9. Navigate to `Project` -> `1 Deployment` -> `debriefly-dockerhub`. Click on `Actions` -> `Edit Deployment`.
-
-
-10. Under `Edit Deployment` -> `Images`, you should see the new tag under the `Tag` dropdown. Select the new tag and hit `Save`.
-
-
-#### Tips
-
-- Give the NERC Openshift Platform a few minutes to pull the new image and restart the application. You can monitor progress in the `Topology` page if you want.
-- If the application doesn't behave like you expect, you can always rollback to the previous version by selecting the previous tag from the `Tag` dropdown and hitting `Save`.
+Rollback must be tested against the upgraded schema before the maintenance
+window. Build the dedicated Clerk rollback image with the manual **build Clerk
+rollback image** workflow and follow the runbook; the unmodified `0.8.0` image
+is not compatible with the new Alembic head. Roll back only the application
+image by immutable digest, never run an Alembic downgrade during an incident,
+and keep the previous authentication provider and its export available until
+the validation window closes.

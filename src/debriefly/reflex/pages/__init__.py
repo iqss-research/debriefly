@@ -5,10 +5,18 @@ if "form_id" not in rx.State.__fields__:
     rx.State.add_var("form_id", str, "")
 if "field_id" not in rx.State.__fields__:
     rx.State.add_var("field_id", str, "")
+if "interview_session_id" not in rx.State.__fields__:
+    rx.State.add_var("interview_session_id", str, "")
 
 
 from debriefly.reflex.pages.index import index
-from debriefly.reflex.pages.signin import signin
+from debriefly.reflex.pages.signin import (
+    forgot_password,
+    register,
+    reset_password_page,
+    signin,
+    verify_email_page,
+)
 from debriefly.reflex.pages.user import user
 from debriefly.reflex.pages.config import config
 from debriefly.reflex.pages.chat import chat
@@ -33,11 +41,16 @@ from debriefly.reflex.pages.admin import admin
 
 from debriefly.reflex.pages.consent import consent
 from debriefly.reflex.pages.qualtrics_embed import qualtrics_embed
+from debriefly.reflex.pages.interview import interview_list, interview_session
 
 # specify pages that are loaded by default
 __all__ = [
     "index",
     "signin",
+    "register",
+    "forgot_password",
+    "reset_password_page",
+    "verify_email_page",
     "user",
     "config",
     "chat",
@@ -55,4 +68,6 @@ __all__ = [
     "admin",
     "consent",
     "qualtrics_embed",
+    "interview_list",
+    "interview_session",
 ]

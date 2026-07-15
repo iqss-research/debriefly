@@ -68,7 +68,13 @@ class AnalysisState(ResponsesState):
             yield value
 
     async def openai_process_question(self, question: str):
-
+        # Rebuild private context from a freshly authorized form before using
+        # the form owner's API key or contacting OpenAI.
+        self.load_responses()
+        if not self._user_has_access():
+            self.processing = False
+            yield rx.toast.error("Survey not found.")
+            return
         self.chat.append(QA(question=question, answer=""))
 
         self.processing = True

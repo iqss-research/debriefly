@@ -1,31 +1,21 @@
 import reflex as rx
-import reflex_clerk as clerk
+
 from debriefly.reflex import styles
-from debriefly.reflex.backend.backend import MainState
+from debriefly.reflex.auth_api import register_auth_routes
+from debriefly.reflex.auth_middleware import LocalAuthMiddleware
 
-clerk.ClerkState.set_fetch_user_on_auth(False)
 
-try:
-    import debriefly.reflex.pages  # noqa
-except ValueError as e:
-    """ "
-    ClerkProvider doesn't work at import time if the appropriate envvars
-    are not set to their correct value. Since this interferes with basic
-    reflex operations like 'reflex db init', 'reflex db migrate' etc.,
-    we ignore any such errors during import of this module.
-    Of couse, the individual pages will still be protected as long as they
-    have the appropriate @template decorator.
-    """
-    if str(e).startswith("Clerk"):
-        pass
-    else:
-        raise
+# Import page decorators before constructing the app.
+import debriefly.reflex.pages  # noqa: E402,F401
 
-# Add these dynamic route vars early, so they can be referenced in the titles.
+
+# Add dynamic route vars early, so they can be referenced in titles and state.
 if "form_id" not in rx.State.__fields__:
     rx.State.add_var("form_id", str, "")
 if "field_id" not in rx.State.__fields__:
     rx.State.add_var("field_id", str, "")
+if "interview_session_id" not in rx.State.__fields__:
+    rx.State.add_var("interview_session_id", str, "")
 
 
 app = rx.App(
@@ -42,5 +32,8 @@ app = rx.App(
     ],
     title="Debriefly",
     description="Debriefing App for Qualtrics",
-    onload=MainState.init,
 )
+# Run before Reflex's hydration middleware so stale researcher substates are
+# cleared before any state snapshot is serialized to a newly loaded page.
+app.add_middleware(LocalAuthMiddleware(), index=0)
+register_auth_routes(app.api)

@@ -3,7 +3,6 @@ from debriefly.reflex.form_designer import routes
 from debriefly.reflex.backend.models import Form
 from debriefly.reflex.backend.backend import MainState
 from sqlmodel import select
-import asyncio
 
 
 class FormSelectOption(rx.Base):
@@ -20,15 +19,7 @@ class FormSelectState(MainState):
         if self.forms_loading:
             return
 
-        user_ready = False
-        for _ in range(10):
-            if await self.sync_user_from_clerk():
-                user_ready = True
-                break
-            await asyncio.sleep(0.05)
-
-        if not user_ready:
-            yield FormSelectState.load_forms
+        if not await self.sync_user_from_session():
             return
 
         if self.forms_loaded_for_user_id == self.user_id:

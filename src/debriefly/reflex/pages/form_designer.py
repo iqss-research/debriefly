@@ -96,7 +96,7 @@ def _responses_analysis() -> rx.Component:
 @rx.page(
     route=routes.FORM_ENTRY,
     title=form_entry_title(),
-    on_load=[MainState.init, FormEntryState.load_form, FormEntryTabState.on_load],
+    on_load=[FormEntryState.load_form, FormEntryTabState.on_load],
 )
 def _form_entry() -> rx.Component:
     return form_entry_page()
@@ -105,7 +105,7 @@ def _form_entry() -> rx.Component:
 @rx.page(
     route=routes.FORM_ENTRY_CHAT,
     title="FORM_ENTRY_CHAT",
-    on_load=[MainState.init, ChatState.on_load],
+    on_load=[ChatState.on_load],
 )
 def _form_entry_chat() -> rx.Component:
     return chat_ui()
@@ -114,7 +114,7 @@ def _form_entry_chat() -> rx.Component:
 @rx.page(
     route=routes.FORM_ENTRY_SUCCESS,
     title="FORM_ENTRY_SUCCESS",
-    on_load=[MainState.init, FormEntryState.notify_parent_survey_complete],
+    on_load=[FormEntryState.notify_parent_survey_complete],
 )
 def _form_entry_success() -> rx.Component:
     return style.layout(
