@@ -16,8 +16,10 @@ WORKDIR /app
 COPY . .
 
 # A production pod must never continue on an ephemeral, pod-local SQLite file
-# because its Secret or envFrom reference was omitted.
-ENV DEBRIEFLY_REQUIRE_DATABASE_URL=true
+# because its Secret or envFrom reference was omitted. Accept either DB_URL or
+# the complete legacy DB_USER/DB_PASS/DB_NAME/DB_HOST configuration so existing
+# OpenShift Secret references can remain in place during the auth migration.
+ENV DEBRIEFLY_REQUIRE_POSTGRESQL=true
 
 # https://stackoverflow.com/questions/58473832
 RUN chgrp -R 0 /app && \

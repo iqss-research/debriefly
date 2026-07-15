@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy.engine import make_url
 
 from debriefly.database import database_url_from_env
 
@@ -33,6 +34,22 @@ def test_complete_legacy_database_configuration_still_works():
     assert database_url_from_env(env) == (
         "postgresql://legacy-user:legacy-pass@legacy-db.example/legacy-debriefly"
     )
+
+
+def test_legacy_database_credentials_are_url_encoded_safely():
+    env = {
+        "DB_USER": "legacy/user",
+        "DB_PASS": "pass@word:/?#%",
+        "DB_HOST": "legacy-db.example",
+        "DB_NAME": "legacy-debriefly",
+    }
+
+    parsed = make_url(database_url_from_env(env))
+
+    assert parsed.username == env["DB_USER"]
+    assert parsed.password == env["DB_PASS"]
+    assert parsed.host == env["DB_HOST"]
+    assert parsed.database == env["DB_NAME"]
 
 
 def test_incomplete_legacy_database_configuration_fails_fast():
@@ -93,3 +110,32 @@ def test_production_image_accepts_a_postgresql_driver_url():
         )
         == database_url
     )
+
+
+def test_production_postgresql_guard_accepts_complete_legacy_configuration():
+    env = {
+        "DEBRIEFLY_REQUIRE_POSTGRESQL": "true",
+        "DB_USER": "legacy-user",
+        "DB_PASS": "legacy-pass",
+        "DB_HOST": "legacy-db.example",
+        "DB_NAME": "legacy-debriefly",
+    }
+
+    assert database_url_from_env(env) == (
+        "postgresql://legacy-user:legacy-pass@legacy-db.example/legacy-debriefly"
+    )
+
+
+def test_production_postgresql_guard_rejects_missing_database_configuration():
+    with pytest.raises(ValueError, match=r"PostgreSQL database configuration"):
+        database_url_from_env({"DEBRIEFLY_REQUIRE_POSTGRESQL": "true"})
+
+
+def test_production_postgresql_guard_rejects_sqlite_url():
+    with pytest.raises(ValueError, match=r"must use PostgreSQL"):
+        database_url_from_env(
+            {
+                "DEBRIEFLY_REQUIRE_POSTGRESQL": "true",
+                "DB_URL": "sqlite:///debriefly.db",
+            }
+        )

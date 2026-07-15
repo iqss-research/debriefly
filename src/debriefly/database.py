@@ -3,6 +3,8 @@
 from collections.abc import Mapping
 from urllib.parse import urlsplit
 
+from sqlalchemy.engine import URL
+
 
 def database_url_from_env(env: Mapping[str, str]) -> str:
     """Resolve the database URL from current and legacy environment variables."""
@@ -10,12 +12,15 @@ def database_url_from_env(env: Mapping[str, str]) -> str:
         "DEBRIEFLY_REQUIRE_DATABASE_URL",
         "",
     ).strip().casefold() in {"1", "true", "yes", "on"}
+    require_postgresql = env.get(
+        "DEBRIEFLY_REQUIRE_POSTGRESQL",
+        "",
+    ).strip().casefold() in {"1", "true", "yes", "on"}
     explicit_url = env.get("DB_URL", "").strip()
     if explicit_url:
-        if (
-            require_explicit_url
-            and urlsplit(explicit_url).scheme.split("+", 1)[0] != "postgresql"
-        ):
+        if (require_explicit_url or require_postgresql) and urlsplit(
+            explicit_url
+        ).scheme.split("+", 1)[0] != "postgresql":
             raise ValueError("DB_URL must use PostgreSQL in this production image.")
         return explicit_url
 
@@ -30,6 +35,12 @@ def database_url_from_env(env: Mapping[str, str]) -> str:
         for name in ("DB_USER", "DB_PASS", "DB_NAME", "DB_HOST")
     }
     if not any(legacy_values.values()):
+        if require_postgresql:
+            raise ValueError(
+                "PostgreSQL database configuration is required in this "
+                "production image. Set DB_URL or provide DB_USER, DB_PASS, "
+                "DB_NAME, and DB_HOST."
+            )
         return "sqlite:///debriefly.db"
 
     missing_values = [name for name, value in legacy_values.items() if not value]
@@ -40,8 +51,10 @@ def database_url_from_env(env: Mapping[str, str]) -> str:
             f"DB_USER, DB_PASS, DB_NAME, and DB_HOST. Missing: {missing}."
         )
 
-    return (
-        "postgresql://"
-        f"{legacy_values['DB_USER']}:{legacy_values['DB_PASS']}"
-        f"@{legacy_values['DB_HOST']}/{legacy_values['DB_NAME']}"
-    )
+    return URL.create(
+        "postgresql",
+        username=legacy_values["DB_USER"],
+        password=legacy_values["DB_PASS"],
+        host=legacy_values["DB_HOST"],
+        database=legacy_values["DB_NAME"],
+    ).render_as_string(hide_password=False)

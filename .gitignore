@@ -8,6 +8,11 @@
 *.pyc
 .DS_Store
 .env
+*.env
+debriefly-local-auth.env
+clerk-users.csv
+password-setup.csv
+pre-cutover-deployment.yaml
 .idea
 .pytest_cache
 .venv

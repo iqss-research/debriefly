@@ -64,7 +64,7 @@ def test_clerk_rollback_image_keeps_clerk_code_and_fails_on_migration_error():
     dockerfile = (ROOT / "Dockerfile.clerk-rollback").read_text(encoding="utf-8")
 
     assert "FROM ${CLERK_BASE_IMAGE}" in dockerfile
-    assert "ENV DEBRIEFLY_REQUIRE_DATABASE_URL=true" in dockerfile
+    assert "ENV DEBRIEFLY_REQUIRE_POSTGRESQL=true" in dockerfile
     assert '__version__ = "0.8.0"' in dockerfile
     assert "import reflex_clerk as clerk" in dockerfile
     assert "python3 -c 'import reflex_clerk'" in dockerfile
@@ -84,7 +84,7 @@ def test_clerk_rollback_image_keeps_clerk_code_and_fails_on_migration_error():
 def test_production_image_requires_postgresql_and_uses_direct_migrations():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "ENV DEBRIEFLY_REQUIRE_DATABASE_URL=true" in dockerfile
+    assert "ENV DEBRIEFLY_REQUIRE_POSTGRESQL=true" in dockerfile
     startup = dockerfile.rsplit("\nCMD ", 1)[1]
     assert "set -eu" in startup
     assert "python3 scripts/apply_schema_migrations.py" in startup
@@ -96,11 +96,24 @@ def test_docker_context_excludes_local_databases_and_migration_exports():
 
     assert {
         ".git/",
+        "*.env",
         "*.csv",
+        "pre-cutover-deployment.yaml",
         "*.db",
         "*.db-*",
         "*.sqlite",
         "*.sqlite-*",
         "*.sqlite3",
         "*.sqlite3-*",
+    } <= patterns
+
+
+def test_git_excludes_local_secret_and_migration_files():
+    patterns = set((ROOT / ".gitignore").read_text(encoding="utf-8").splitlines())
+
+    assert {
+        "*.env",
+        "clerk-users.csv",
+        "password-setup.csv",
+        "pre-cutover-deployment.yaml",
     } <= patterns

@@ -17,8 +17,19 @@ foreign keys that refer to it.
 
    Only a verified primary email can become a local login. Never infer
    verification from the presence of an address.
-3. Create a separate OpenShift Secret for PostgreSQL, local authentication, and
-   email. Do not replace or delete the existing Clerk Secret during cutover:
+3. Create a separate OpenShift Secret for local authentication and email. Do
+   not replace or delete the existing Clerk or PostgreSQL Secrets during
+   cutover. The current NERC Deployment already supplies PostgreSQL as:
+
+   ```text
+   DB_HOST=postgresql
+   DB_NAME  <- Secret/postgresql key database-name
+   DB_USER  <- Secret/postgresql key database-user
+   DB_PASS  <- Secret/postgresql key database-password
+   ```
+
+   Preserve those references; do not decode or copy the database password into
+   the new local-auth Secret. For the new Secret use:
 
    ```sh
    AUTH_SECRET_KEY="$(openssl rand -hex 32)"
@@ -27,7 +38,9 @@ foreign keys that refer to it.
    AUTH_ALLOWED_ORIGINS="https://www.debriefly.net"
    AUTH_COOKIE_SECURE="true"
    AUTH_ALLOW_REGISTRATION="false"
-   DB_URL="postgresql://<user>:<password>@<host>:5432/<database>"
+   AUTH_SESSION_HOURS="168"
+   AUTH_TOKEN_HOURS="48"
+   AUTH_PASSWORD_HASH_CONCURRENCY="2"
    SMTP_HOST="smtp.example.org"
    SMTP_PORT="587"
    SMTP_STARTTLS="true"
@@ -35,12 +48,18 @@ foreign keys that refer to it.
    SMTP_FROM="Debriefly <no-reply@example.org>"
    ```
 
+   These SMTP values must come from a real production mail relay. The local
+   development catcher at `127.0.0.1:1025` does not deliver email and must
+   never be copied into OpenShift. Do not create the production Secret with
+   placeholder SMTP values.
+
    `AUTH_SECRET_KEY` must remain stable after launch: changing it invalidates
    sessions and outstanding one-time links. Do not log or commit it. Leave
    registration disabled until the Clerk import and ownership checks pass; this
    prevents a new local account from claiming a migrated email during cutover.
-   Production must set `DB_URL` explicitly to the shared PostgreSQL service.
-   Both production images refuse a missing or non-PostgreSQL `DB_URL`; local
+   Both production images require PostgreSQL and accept either an explicit
+   PostgreSQL `DB_URL` or the complete four-variable configuration above. They
+   refuse missing, incomplete, or SQLite production configuration; local
    `./debriefly` development can still use SQLite. Add `SMTP_USERNAME` and
    `SMTP_PASSWORD` to the Secret only when the relay requires authentication.
 4. Confirm the public proxy sends `/_event/*` to port 8000 and everything else
@@ -69,15 +88,15 @@ failures. Before touching production:
    a `docker-pullable://` prefix to the equivalent `docker.io/` reference if
    needed, while preserving the digest exactly.
 2. In GitHub Actions, run **build Clerk rollback image**. Set `release_tag` to
-   `0.9.0`, supply the running image's immutable reference as
-   `clerk_base_image`, and use `0.9.0-clerk-rollback` as `output_tag`. The
+   `0.9.2`, supply the running image's immutable reference as
+   `clerk_base_image`, and use `0.9.2-clerk-rollback` as `output_tag`. The
    workflow pins the reviewed release tag, asserts the sole Alembic head, and
    refuses a base that is not the Clerk-backed `0.8.0` application.
 3. Record the new rollback image's immutable digest and confirm its
    `debriefly.rollback.base-image` label contains the exact running-pod digest.
    A tag alone is not a rollback artifact.
 4. Restore a recent production backup into an isolated staging PostgreSQL
-   database. Upgrade it with the `0.9.0` candidate, then start the prepared
+   database. Upgrade it with the `0.9.2` candidate, then start the prepared
    Clerk rollback image with the retained Clerk Secret against that upgraded
    database. Verify that startup succeeds, a Clerk test user can sign in, and
    its existing survey opens.
@@ -88,14 +107,38 @@ image as the rollback target.
 ## Add schema while the old application remains live
 
 Run the exact new image digest as a one-off migration job against production,
-with the same `DB_URL` Secret as the Deployment, but without switching web
-traffic to it:
+with the same database environment references as the Deployment, but without
+switching web traffic to it. For the current NERC PostgreSQL service, add this
+to the migration Job container:
+
+```yaml
+env:
+  - name: DB_HOST
+    value: postgresql
+  - name: DB_NAME
+    valueFrom:
+      secretKeyRef:
+        name: postgresql
+        key: database-name
+  - name: DB_USER
+    valueFrom:
+      secretKeyRef:
+        name: postgresql
+        key: database-user
+  - name: DB_PASS
+    valueFrom:
+      secretKeyRef:
+        name: postgresql
+        key: database-password
+```
+
+Then run:
 
 ```sh
 python3 scripts/apply_schema_migrations.py
 ```
 
-The `0.9.0` candidate includes both the reviewed human-interview revision
+The `0.9.2` candidate includes both the reviewed human-interview revision
 `a3f2b1c4d5e6` and local-auth revision `f6b7c8d9e0a1`; rehearse both features as
 one release. The command fails unless the database reaches the code's sole head
 and prints `Database schema is current at f6b7c8d9e0a1.` on success. The
@@ -128,7 +171,8 @@ safest simple procedure is a short maintenance window:
 
 4. Run the importer in a one-off Job using the exact candidate digest. Mount
    `debriefly-clerk-import` read-only at `/var/run/debriefly-import`, and load
-   `DB_URL` from the production database Secret. A minimal dry-run container is:
+   the unchanged production PostgreSQL references. A minimal dry-run container
+   is:
 
    ```yaml
    containers:
@@ -139,9 +183,27 @@ safest simple procedure is a short maintenance window:
          - /var/run/debriefly-import/clerk-users.csv
          - --issuer
          - https://<exact-clerk-issuer>
+       env:
+         - name: DB_HOST
+           value: postgresql
+         - name: DB_NAME
+           valueFrom:
+             secretKeyRef:
+               name: postgresql
+               key: database-name
+         - name: DB_USER
+           valueFrom:
+             secretKeyRef:
+               name: postgresql
+               key: database-user
+         - name: DB_PASS
+           valueFrom:
+             secretKeyRef:
+               name: postgresql
+               key: database-password
        envFrom:
          - secretRef:
-             name: <database-and-local-auth-secret>
+             name: debriefly-local-auth
        volumeMounts:
          - name: clerk-export
            mountPath: /var/run/debriefly-import
@@ -230,9 +292,9 @@ checks this role for `/admin`, `/config`, and global-configuration mutations.
 
 ## Cut over and verify
 
-1. Attach the new database/local-auth/SMTP Secret without removing the retained
-   Clerk Secret. Set the candidate image by immutable digest, restore the saved
-   replica count, and wait for rollout:
+1. Attach the new local-auth/SMTP Secret without removing the retained Clerk
+   Secret or the existing `postgresql` references. Set the candidate image by
+   immutable digest, restore the saved replica count, and wait for rollout:
 
    ```sh
    oc set image deployment/debriefly-dockerhub \
