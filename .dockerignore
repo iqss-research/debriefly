@@ -1,4 +1,16 @@
 Dockerfile
+.git/
+.env
+.env.*
+!.env.sample
+*.csv
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+.pytest_cache/
 .web/
 .idea/
 .venv/

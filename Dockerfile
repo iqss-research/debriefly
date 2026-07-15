@@ -15,6 +15,10 @@ RUN mkdir /app
 WORKDIR /app
 COPY . .
 
+# A production pod must never continue on an ephemeral, pod-local SQLite file
+# because its Secret or envFrom reference was omitted.
+ENV DEBRIEFLY_REQUIRE_DATABASE_URL=true
+
 # https://stackoverflow.com/questions/58473832
 RUN chgrp -R 0 /app && \
     chmod -R g=u /app && \
@@ -26,7 +30,7 @@ RUN python3 -m pip install -e . --no-deps
 # Needed until Reflex properly passes SIGTERM on backend.
 STOPSIGNAL SIGKILL
 
-CMD reflex db init && \
-    [ -d alembic ] && reflex db migrate || echo "Skipping alembic migration." && \
-    python3 scripts/seed_data.py && \
+CMD set -eu; \
+    python3 scripts/apply_schema_migrations.py; \
+    python3 scripts/seed_data.py; \
     exec reflex run --env prod

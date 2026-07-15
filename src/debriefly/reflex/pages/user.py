@@ -10,7 +10,7 @@ class UserSettingsState(MainState):
     model_input: str = DEFAULT_OPENAI_MODEL
 
     async def load_settings(self):
-        if not await self.sync_user_from_clerk():
+        if not await self.sync_user_from_session():
             return
 
         with rx.session() as session:
@@ -28,7 +28,7 @@ class UserSettingsState(MainState):
         self.model_input = value
 
     async def update_openai_settings(self, form_data: dict[str, str]):
-        if not await self.sync_user_from_clerk():
+        if not await self.sync_user_from_session():
             return rx.toast.error("Please sign in before saving your OpenAI key.")
 
         api_key = (form_data.get("openai_api_key") or "").strip()
@@ -56,7 +56,7 @@ class UserSettingsState(MainState):
         return rx.toast.success("OpenAI settings updated successfully.")
 
     async def clear_openai_api_key(self):
-        if not await self.sync_user_from_clerk():
+        if not await self.sync_user_from_session():
             return rx.toast.error("Please sign in before removing your OpenAI key.")
 
         with rx.session() as session:

@@ -9,7 +9,6 @@ from sqlmodel import select, or_
 from jinja2 import Environment, PackageLoader, select_autoescape
 import logging
 from debriefly.openai import get_client
-from debriefly.reflex.backend.backend import MainState
 from debriefly.reflex.backend.models import (
     Response,
     FieldValue,
@@ -18,6 +17,7 @@ from debriefly.reflex.backend.models import (
     Option,
     FieldType,
     UserOpenAISettings,
+    HumanChatMessage,
 )
 from debriefly.reflex.form_designer.pages.form_entry import (
     FormEntryState,
@@ -87,7 +87,7 @@ class QA(rx.Base):
     answer: str
 
 
-class ChatState(MainState):
+class ChatState(rx.State):
     chat_start_time: Optional[float] = None  # Unix timestamp when chat starts
     loaded: bool = False
     this_form_id: int = -1  # populated on on_load
@@ -111,6 +111,9 @@ class ChatState(MainState):
     last_activity_time: float = 0.0  # timestamp of last keystroke
     elapsed_time: int = 0  # accumulated seconds
     paused: bool = False  # true when idle > 60s
+    last_seen_human_msg_id: int = (
+        0  # tracks last interviewer message seen in human mode
+    )
 
     @rx.var
     def elapsed_time_str(self) -> str:
@@ -177,6 +180,15 @@ class ChatState(MainState):
         logger.info(
             f"Loading debriefing response for response {self.client_token} and form {entry_state.form.id}"
         )
+
+        if not self.this_form_id:
+            logger.error("ChatState.on_load: form not loaded (form.id is None)")
+            self.error = (
+                "Your survey session could not be loaded. "
+                "Please reopen the survey from the start."
+            )
+            self.loaded = True
+            return
         now = time.time()
         self.last_activity_time = now
         self.elapsed_time = 0
@@ -297,21 +309,47 @@ class ChatState(MainState):
                 tmpl = env.from_string(self.field.custom_initial_message)
                 self.initial_message = tmpl.render(**kwargs)
 
-            self.chat = [QA(question="", answer=self.initial_message)]
+            if self.field.interviewer_mode:
+                # Human interviewer mode — write session context for the researcher.
+                existing = session.exec(
+                    select(HumanChatMessage)
+                    .where(HumanChatMessage.field_value_id == self.field_value_id)
+                    .order_by(HumanChatMessage.id.asc())
+                ).all()
 
-            settings = UserOpenAISettings.get_for_user(
-                session, entry_state.form.user_id
-            )
-            if settings is None or not settings.is_configured:
-                self.error = "This survey is not ready for chat. Please contact the survey owner."
+                if not any(m.role == "context" for m in existing):
+                    context_msg = HumanChatMessage(
+                        field_value_id=self.field_value_id,
+                        role="context",
+                        content=self.initial_message,
+                    )
+                    session.add(context_msg)
+                    session.commit()
 
+                # Rebuild the transcript so reloads don't lose history.
+                if self._sync_human_chat(existing):
+                    self.done = True
+            else:
+                self.chat = [QA(question="", answer=self.initial_message)]
+                settings = UserOpenAISettings.get_for_user(
+                    session, entry_state.form.user_id
+                )
+                if settings is None or not settings.is_configured:
+                    self.error = "This survey is not ready for chat. Please contact the survey owner."
+
+            events = []
             if (
                 not self.error
                 and not self.show_force_finish
                 and self.field.min_debriefing_time > 0
                 and self.field.max_debriefing_time > 0
             ):
-                return ChatState.count_time()
+                events.append(ChatState.count_time())
+            # Continuously sync the researcher's messages for the whole session.
+            if self.field.interviewer_mode and not self.done:
+                events.append(ChatState.poll_human_chat())
+            if events:
+                return events
 
     async def process_question(self, form_data: dict[str, str]):
         question = form_data.get("question")
@@ -322,9 +360,126 @@ class ChatState(MainState):
         if self.paused:
             self.paused = False
 
-        model = self.openai_process_question
+        if self.field.interviewer_mode:
+            model = self.human_process_question
+        else:
+            model = self.openai_process_question
         async for value in model(question):
             yield value
+
+    async def human_process_question(self, question: str):
+        """Write the respondent's message to the DB. The background poll task
+        (``poll_human_chat``) streams the researcher's replies back in."""
+        self.chat.append(QA(question=question, answer=""))
+        self.processing = True
+
+        with rx.session() as session:
+            msg = HumanChatMessage(
+                field_value_id=self.field_value_id,
+                role="user",
+                content=question,
+            )
+            session.add(msg)
+            session.commit()
+            session.refresh(msg)
+            self.last_seen_human_msg_id = max(self.last_seen_human_msg_id, msg.id)
+        yield
+
+    def _sync_human_chat(self, messages: list) -> bool:
+        """Rebuild ``self.chat`` from the stored HumanChatMessage rows.
+
+        Sets the processing flag (True while waiting on the researcher) and
+        ``last_seen_human_msg_id``. Returns True if the interview has ended.
+        """
+        convo = [m for m in messages if m.role in ("user", "interviewer")]
+        chat: list[QA] = []
+        pending: Optional[QA] = None
+        last_id = 0
+        for m in convo:
+            if m.role == "user":
+                if pending is not None:
+                    chat.append(pending)
+                pending = QA(question=m.content, answer="")
+            else:  # interviewer
+                if pending is None:
+                    pending = QA(question="", answer=m.content)
+                else:
+                    pending.answer = m.content
+                chat.append(pending)
+                pending = None
+            last_id = max(last_id, m.id)
+        if pending is not None:
+            chat.append(pending)
+
+        if not chat:
+            # No researcher opener yet — show a waiting bubble.
+            chat = [QA(question="", answer="")]
+            self.processing = True
+        else:
+            # Waiting on the researcher when the last turn has no answer.
+            self.processing = chat[-1].answer == "" and chat[-1].question != ""
+
+        self.chat = chat
+        self.last_seen_human_msg_id = last_id
+        return any(m.role == "interviewer" and m.end_chat for m in messages)
+
+    def _build_transcript(self) -> list[dict]:
+        messages = []
+        for qa in self.chat:
+            if qa.question:
+                messages.append({"role": "user", "content": qa.question})
+            if qa.answer:
+                messages.append({"role": "assistant", "content": qa.answer})
+        return messages
+
+    @rx.background
+    async def poll_human_chat(self):
+        """Background task: for the whole session, sync new researcher messages
+        into the chat and finish when the interview is ended."""
+        while True:
+            await asyncio.sleep(2)
+            async with self:
+                if self.done:
+                    return
+                fv_id = self.field_value_id
+                last_seen = self.last_seen_human_msg_id
+
+            with rx.session() as session:
+                messages = session.exec(
+                    select(HumanChatMessage)
+                    .where(HumanChatMessage.field_value_id == fv_id)
+                    .order_by(HumanChatMessage.id.asc())
+                ).all()
+
+            max_id = max((m.id for m in messages), default=0)
+            if max_id <= last_seen:
+                continue
+
+            async with self:
+                ended = self._sync_human_chat(messages)
+                if not ended:
+                    continue
+                # Persist the transcript and advance past this debriefing.
+                self.done = True
+                with rx.session() as session:
+                    field_value = session.exec(
+                        select(FieldValue).where(FieldValue.id == fv_id)
+                    ).first()
+                    if field_value is not None:
+                        field_value.debriefing = json.dumps(self._build_transcript())
+                        session.add(field_value)
+                        session.commit()
+                tab_state = await self.get_state(FormEntryTabState)
+                await tab_state.advance()
+                beyond_last = tab_state.is_beyond_last_tab
+
+            if not beyond_last:
+                yield rx.redirect(
+                    routes.show_form(self.this_form_code) + "?continue=yes"
+                )
+            else:
+                yield rx.redirect(routes.FORM_ENTRY_SUCCESS)
+            return
 
     async def openai_process_question(self, question: str):
         if self.error:

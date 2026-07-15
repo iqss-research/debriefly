@@ -47,5 +47,8 @@ def test_alembic_init_upgrade_downgrade(tmp_path):
     alembic_cfg.set_main_option("script_location", str(THIS_DIR / "../alembic"))
     alembic_cfg.set_main_option("sqlalchemy.url", db_url)
 
-    command.upgrade(alembic_cfg, "head")
-    command.downgrade(alembic_cfg, "base")
+    # A downgrade must clean up PostgreSQL-specific objects such as named enum
+    # types, otherwise a second upgrade fails even though no tables remain.
+    for _ in range(2):
+        command.upgrade(alembic_cfg, "head")
+        command.downgrade(alembic_cfg, "base")

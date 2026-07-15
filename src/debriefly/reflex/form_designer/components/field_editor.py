@@ -10,7 +10,11 @@ from debriefly.reflex.backend.models import (
     UserOpenAISettings,
 )
 from debriefly.reflex.backend.backend import MainState as AppState
-from debriefly.reflex.form_designer.components.form_editor import FormEditorState
+from debriefly.reflex.form_designer.components.form_editor import (
+    FormEditorState,
+    _get_owned_field,
+    _get_owned_form,
+)
 from debriefly.openai import check_prompt_compliance, PromptVerdict
 
 # from debriefly.reflex.form_designer.components.field_view import field_input
@@ -37,6 +41,7 @@ tooltips = {
     "bundle_items": "The subquestions or row labels respondents will answer under the main question.",
     "minimum_time": "The minimum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the participants can finish the conversation.",
     "maximum_time": "The maximum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the conversation will be ended automatically.",
+    "interviewer_mode": "If checked, a human researcher will respond to the participant instead of the LLM. The researcher accesses the live session from /interview.",
     "system_prompt": "Edit the system prompt that governs the LLM behavior (Caution: you must check if your prompt works well in your context).",
     "system_prompt_edit": "Edit the system prompt that governs the LLM behavior. You must include the instruction about {{end_of_survey_token}}, which is the token that indicates the end of the survey. You are NOT allowed to create system prompts that are not for the cognitive debriefing.",
     "initial_message_edit": "Edit the initial message that the assistant will send to the user at first. You must include the token {{question}}, which is the token that will be replaced by the question text.",
@@ -49,7 +54,7 @@ class FieldEditorState(AppState):
     field: Field = Field(
         min_debriefing_time=1800, max_debriefing_time=3600
     )  # Default to 30 minutes for min and 60 for max
-    form_owner_id: int = -1
+    form_owner_id: str = ""
     field_editor_open: bool = False
 
     show_prompt_editor: bool = False  # NEW flag
@@ -109,7 +114,33 @@ class FieldEditorState(AppState):
         self.field.max_debriefing_time = max(0, new_time)  # Prevent negative values
 
     def _user_has_access(self):
-        return self.form_owner_id == self.user_id
+        return bool(self.user_id) and self.form_owner_id == self.user_id
+
+    def _field_for_update(self, session):
+        """Return a field that belongs to the current user's route form."""
+        form = _get_owned_form(session, self.form_id, self.user_id)
+        if form is None:
+            return None
+
+        self.form_owner_id = form.user_id
+        if (
+            self.field.id is not None
+            and _get_owned_field(
+                session,
+                field_id=self.field.id,
+                form_id=form.id,
+                user_id=self.user_id,
+            )
+            is None
+        ):
+            return None
+
+        # Keep the in-progress editor values, but pin their parent to the
+        # server-authorized route form before persisting any child changes.
+        self.field.form_id = form.id
+        session.add(self.field)
+        session.flush()
+        return self.field
 
     def handle_submit(self, form_data: dict[str, str]):
         if self.field.type_ == FieldType.static:
@@ -177,9 +208,12 @@ class FieldEditorState(AppState):
         sys_prompt = form_data.get("custom_system_message", "").strip()
         init_msg = form_data.get("custom_initial_message", "").strip()
         is_debriefing = bool(form_data.get("debriefing")) or self.field.debriefing
+        is_interviewer = (
+            bool(form_data.get("interviewer_mode")) or self.field.interviewer_mode
+        )
 
-        # run compliance checks (only on non-empty edits) only if debriefing is checked
-        if is_debriefing:
+        # run compliance checks only for LLM debriefing (not human interviewer mode)
+        if is_debriefing and not is_interviewer:
             with rx.session() as session:
                 settings = UserOpenAISettings.get_for_user(session, self.user_id)
 
@@ -220,6 +254,7 @@ class FieldEditorState(AppState):
             self.field.required = bool(form_data.get("required"))
             self.field.bundled = bool(form_data.get("bundled"))
             self.field.debriefing = bool(form_data.get("debriefing"))
+            self.field.interviewer_mode = bool(form_data.get("interviewer_mode"))
 
         if "custom_system_message" in form_data:
             self.field.custom_system_message = form_data[
@@ -249,19 +284,40 @@ class FieldEditorState(AppState):
             return rx.redirect(routes.edit_form(self.form_id))
 
     async def load_field(self):
-        form_state = await self.get_state(FormEditorState)
-        self.form_owner_id = form_state.form.user_id
-        if not self._user_has_access():
-            return
         self.show_prompt_editor = False
         self.error = ""
-        if self.field_id == "new":
-            self.field = Field(
-                form_id=self.form_id, min_debriefing_time=1800, max_debriefing_time=3600
-            )  # Default to 30 minutes for min and 60 for max
-        else:
-            with rx.session() as session:
-                self.field = session.get(Field, self.field_id)
+        with rx.session() as session:
+            form = _get_owned_form(session, self.form_id, self.user_id)
+            if form is None:
+                self.form_owner_id = ""
+                self.field = Field(min_debriefing_time=1800, max_debriefing_time=3600)
+                self.field_editor_open = False
+                self.error = "Survey not found."
+                return
+
+            self.form_owner_id = form.user_id
+            if self.field_id == "new":
+                self.field = Field(
+                    form_id=form.id,
+                    min_debriefing_time=1800,
+                    max_debriefing_time=3600,
+                )  # Default to 30 minutes for min and 60 minutes for max
+            else:
+                field = _get_owned_field(
+                    session,
+                    field_id=self.field_id,
+                    form_id=form.id,
+                    user_id=self.user_id,
+                )
+                if field is None:
+                    self.form_owner_id = ""
+                    self.field = Field(
+                        min_debriefing_time=1800, max_debriefing_time=3600
+                    )
+                    self.field_editor_open = False
+                    self.error = "Question not found."
+                    return
+                self.field = field
                 if self.field.min_debriefing_time is None:
                     self.field.min_debriefing_time = 1800
                 if self.field.max_debriefing_time is None:
@@ -302,94 +358,99 @@ class FieldEditorState(AppState):
         setattr(self.field, key, value)
 
     def set_option(self, index: int, key: str, value: str):
-        if not self._user_has_access():
+        if not self._user_has_access() or key not in {"label", "value"}:
             return
         with rx.session() as session:
-            session.add(self.field)
-            if self.field.id is None:
-                session.commit()
-                session.refresh(self.field)
-            option = self.field.options[index]
-            option.field_id = self.field.id
+            field = self._field_for_update(session)
+            if field is None or index < 0 or index >= len(field.options):
+                return
+            option = field.options[index]
+            option.field_id = field.id
             setattr(option, key, value)
             session.add(option)
             session.commit()
-            session.refresh(self.field)
+            session.refresh(field)
+            self.field = field
 
     def add_option(self):
         if not self._user_has_access():
             return
         with rx.session() as session:
-            session.add(self.field)
-            if not self.field.id:
-                session.commit()
-                session.refresh(self.field)
-            option = Option(field_id=self.field.id)
-            self.field.options.append(option)
+            field = self._field_for_update(session)
+            if field is None:
+                return
+            option = Option(field_id=field.id)
+            field.options.append(option)
             session.add(option)
-            session.add(self.field)
+            session.add(field)
             session.commit()
-            session.refresh(self.field)
+            session.refresh(field)
+            self.field = field
             return utils.focus_input_in_class("fd-Option-Label")
 
     def delete_option(self, index: int):
         if not self._user_has_access():
             return
         with rx.session() as session:
-            session.add(self.field)
-            option_to_delete = session.get(Option, self.field.options[index].id)
+            field = self._field_for_update(session)
+            if field is None or index < 0 or index >= len(field.options):
+                return
+            option_to_delete = field.options[index]
             if option_to_delete is not None:
                 session.delete(option_to_delete)
-            del self.field.options[index]
+            del field.options[index]
             session.commit()
-            session.refresh(self.field)
+            session.refresh(field)
+            self.field = field
 
     def set_bundle_item(self, index: int, key: str, value: str):
-        if not self._user_has_access():
+        if not self._user_has_access() or key not in {"label", "value"}:
             return
         with rx.session() as session:
-            session.add(self.field)
-            if self.field.id is None:
-                session.commit()
-                session.refresh(self.field)
-            item = self.field.bundle_items[index]
-            item.field_id = self.field.id
+            field = self._field_for_update(session)
+            if field is None or index < 0 or index >= len(field.bundle_items):
+                return
+            item = field.bundle_items[index]
+            item.field_id = field.id
             setattr(item, key, value)
             session.add(item)
             session.commit()
-            session.refresh(self.field)
+            session.refresh(field)
+            self.field = field
 
     def add_bundle_item(self):
         if not self._user_has_access():
             return
         with rx.session() as session:
-            session.add(self.field)
-            if not self.field.id:
-                session.commit()
-                session.refresh(self.field)
+            field = self._field_for_update(session)
+            if field is None:
+                return
             next_ordering = (
-                max((item.ordering for item in self.field.bundle_items), default=0.0)
-                + 1.0
+                max((item.ordering for item in field.bundle_items), default=0.0) + 1.0
             )
-            item = BundleItem(field_id=self.field.id, ordering=next_ordering)
-            self.field.bundle_items.append(item)
+            item = BundleItem(field_id=field.id, ordering=next_ordering)
+            field.bundle_items.append(item)
             session.add(item)
-            session.add(self.field)
+            session.add(field)
             session.commit()
-            session.refresh(self.field)
+            session.refresh(field)
+            self.field = field
             return utils.focus_input_in_class("fd-BundleItem-Label")
 
     def delete_bundle_item(self, index: int):
         if not self._user_has_access():
             return
         with rx.session() as session:
-            session.add(self.field)
-            item_to_delete = session.get(BundleItem, self.field.bundle_items[index].id)
+            field = self._field_for_update(session)
+            if field is None or index < 0 or index >= len(field.bundle_items):
+                return
+            item_to_delete = field.bundle_items[index]
             if item_to_delete is not None:
                 session.delete(item_to_delete)
-            del self.field.bundle_items[index]
+            del field.bundle_items[index]
             session.commit()
-            session.refresh(self.field)
+            session.refresh(field)
+            self.field = field
 
     def open_new_static_field(self):
         """Create a new static field and open the editor modal."""
@@ -410,7 +471,12 @@ class FieldEditorState(AppState):
         """Update 'Debriefing' and enforce 'Required' when 'Debriefing' is checked."""
         self.field.debriefing = is_checked
         if is_checked:
-            self.field.required = True  # Automatically set 'Required' to True
+            self.field.required = True
+        if not is_checked:
+            self.field.interviewer_mode = False
+
+    def handle_interviewer_mode_change(self, is_checked: bool):
+        self.field.interviewer_mode = is_checked
 
     def reset_system_prompt(self):
         """Clear the override so the default template shows again."""
@@ -733,7 +799,8 @@ def field_editor():
                                     content=tooltips["debriefing"],
                                 ),
                                 rx.cond(
-                                    FieldEditorState.field.debriefing,
+                                    FieldEditorState.field.debriefing
+                                    & ~FieldEditorState.field.interviewer_mode,
                                     rx.button(
                                         "Edit System Prompts",
                                         on_click=FieldEditorState.toggle_prompt_editor,
@@ -743,13 +810,30 @@ def field_editor():
                                     ),
                                 ),
                                 rx.cond(
-                                    FieldEditorState.field.debriefing,
+                                    FieldEditorState.field.debriefing
+                                    & ~FieldEditorState.field.interviewer_mode,
                                     rx.tooltip(
                                         rx.icon("info", size=16),
                                         content=tooltips["system_prompt"],
                                     ),
                                 ),
                                 align="center",
+                            ),
+                            rx.cond(
+                                FieldEditorState.field.debriefing,
+                                rx.hstack(
+                                    rx.checkbox(
+                                        "Human Interviewer Mode",
+                                        name="interviewer_mode",
+                                        checked=FieldEditorState.field.interviewer_mode,
+                                        on_change=FieldEditorState.handle_interviewer_mode_change,
+                                    ),
+                                    rx.tooltip(
+                                        rx.icon("info", size=16),
+                                        content=tooltips["interviewer_mode"],
+                                    ),
+                                    align="center",
+                                ),
                             ),
                             # Minimum Time input for debriefing
                             rx.cond(
@@ -1067,7 +1151,7 @@ def static_field_editor():
     )
 
 
-class PromptEditorState(rx.State):
+class PromptEditorState(AppState):
     system_prompt: str = ""  # what you store in DB
     initial_message: str = ""
     editor_open: bool = False  # modal visibility
