@@ -32,6 +32,7 @@ import sqlalchemy as sa
 from sqlmodel import Session, select
 
 from debriefly.reflex.backend.models import (
+    AuthSession,
     AuthToken,
     Form,
     LocalCredential,
@@ -95,6 +96,7 @@ class ImportPlan:
     actions: list[ImportAction] = field(default_factory=list)
     skipped_subjects: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
+    inactive_owner_ids: tuple[str, ...] = ()
 
     @property
     def can_commit(self) -> bool:
@@ -111,6 +113,10 @@ class ImportPlan:
     @property
     def credentials_to_create(self) -> int:
         return sum(action.create_credential for action in self.actions)
+
+    @property
+    def inactive_owner_count(self) -> int:
+        return len(self.inactive_owner_ids)
 
 
 @dataclass(frozen=True)
@@ -289,6 +295,38 @@ def read_clerk_csv(path: Path, *, now: datetime | None = None) -> list[ClerkUser
     return rows
 
 
+def read_inactive_owner_ids(path: Path) -> tuple[str, ...]:
+    """Read an exact, private allowlist of owners intentionally left inactive."""
+
+    owner_ids: list[str] = []
+    first_lines: dict[str, int] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as owner_file:
+        for line_number, raw_line in enumerate(owner_file, start=1):
+            owner_id = raw_line.rstrip("\r\n")
+            if not owner_id:
+                raise ValueError(f"line {line_number}: inactive owner ID is empty")
+            if owner_id != owner_id.strip() or any(
+                character.isspace() for character in owner_id
+            ):
+                raise ValueError(
+                    f"line {line_number}: inactive owner ID contains whitespace"
+                )
+            if len(owner_id) > 255:
+                raise ValueError(f"line {line_number}: inactive owner ID is too long")
+            prior_line = first_lines.get(owner_id)
+            if prior_line is not None:
+                raise ValueError(
+                    f"line {line_number}: duplicate inactive owner ID also found "
+                    f"on line {prior_line}"
+                )
+            first_lines[owner_id] = line_number
+            owner_ids.append(owner_id)
+
+    if not owner_ids:
+        raise ValueError("inactive owner file has no user IDs")
+    return tuple(owner_ids)
+
+
 def _owned_user_ids(session: Session) -> tuple[set[str], set[str], set[str]]:
     form_owner_ids = set(session.exec(select(Form.user_id)).all())
     settings_owner_ids = set(session.exec(select(UserOpenAISettings.user_id)).all())
@@ -301,6 +339,7 @@ def build_import_plan(
     *,
     issuer: str,
     create_missing_users: bool = False,
+    inactive_owner_ids: Sequence[str] = (),
 ) -> ImportPlan:
     """Build a complete plan and reject ambiguous or orphaned ownership."""
 
@@ -451,16 +490,63 @@ def build_import_plan(
             )
         )
 
-    uncovered_owners = sorted(
+    uncovered_owners = {
         owner
         for owner in owners
         if owner in users and owner not in planned_credential_users
+    }
+    requested_inactive_owner_ids = tuple(inactive_owner_ids)
+    inactive_owner_id_set = set(requested_inactive_owner_ids)
+    duplicate_inactive_owner_count = len(requested_inactive_owner_ids) - len(
+        inactive_owner_id_set
     )
-    if uncovered_owners:
+    if duplicate_inactive_owner_count:
+        plan.conflicts.append(
+            "inactive-owner allowlist contains "
+            f"{duplicate_inactive_owner_count} duplicate ID(s)"
+        )
+
+    unknown_inactive_owners = inactive_owner_id_set - users.keys()
+    if unknown_inactive_owners:
+        plan.conflicts.append(
+            "inactive-owner allowlist contains "
+            f"{len(unknown_inactive_owners)} unknown user ID(s)"
+        )
+    non_owner_inactive_users = (inactive_owner_id_set & users.keys()) - owners
+    if non_owner_inactive_users:
+        plan.conflicts.append(
+            "inactive-owner allowlist contains "
+            f"{len(non_owner_inactive_users)} user ID(s) that own no forms or settings"
+        )
+    covered_inactive_owners = (inactive_owner_id_set & owners) - uncovered_owners
+    if covered_inactive_owners:
+        plan.conflicts.append(
+            "inactive-owner allowlist contains "
+            f"{len(covered_inactive_owners)} owner ID(s) that already have or will "
+            "receive local credentials"
+        )
+
+    identity_user_ids = set(session.exec(select(UserIdentity.user_id)).all())
+    token_user_ids = set(session.exec(select(AuthToken.user_id)).all())
+    session_user_ids = set(session.exec(select(AuthSession.user_id)).all())
+    auth_artifact_inactive_owners = inactive_owner_id_set & (
+        identity_user_ids | token_user_ids | session_user_ids
+    )
+    if auth_artifact_inactive_owners:
+        plan.conflicts.append(
+            "inactive-owner allowlist contains "
+            f"{len(auth_artifact_inactive_owners)} owner ID(s) with existing local "
+            "authentication artifacts"
+        )
+
+    unapproved_uncovered_owners = sorted(uncovered_owners - inactive_owner_id_set)
+    if unapproved_uncovered_owners:
         plan.conflicts.append(
             "owners without a verified local credential import: "
-            + ", ".join(uncovered_owners)
+            + ", ".join(unapproved_uncovered_owners)
         )
+    if inactive_owner_id_set == uncovered_owners and not plan.conflicts:
+        plan.inactive_owner_ids = tuple(sorted(inactive_owner_id_set))
     return plan
 
 
@@ -521,6 +607,36 @@ def apply_import_plan(
         raise ValueError("refusing to apply an import plan with conflicts")
 
     setup_tokens: list[SetupToken] = []
+    for inactive_owner_id in plan.inactive_owner_ids:
+        inactive_owner = session.get(User, inactive_owner_id)
+        if inactive_owner is None:
+            raise ValueError("inactive owner disappeared after plan validation")
+        has_auth_artifact = (
+            session.get(LocalCredential, inactive_owner_id) is not None
+            or session.exec(
+                select(UserIdentity.id).where(UserIdentity.user_id == inactive_owner_id)
+            ).first()
+            is not None
+            or session.exec(
+                select(AuthToken.id).where(AuthToken.user_id == inactive_owner_id)
+            ).first()
+            is not None
+            or session.exec(
+                select(AuthSession.id).where(AuthSession.user_id == inactive_owner_id)
+            ).first()
+            is not None
+        )
+        if has_auth_artifact:
+            raise ValueError(
+                "inactive owner gained an authentication artifact after plan "
+                "validation"
+            )
+        if inactive_owner.status != "inactive":
+            inactive_owner.status = "inactive"
+            inactive_owner.auth_version += 1
+            inactive_owner.updated_at = now
+            session.add(inactive_owner)
+
     for action in plan.actions:
         user = session.get(User, action.user_id)
         if user is None:
@@ -598,6 +714,35 @@ def apply_import_plan(
             )
 
     session.flush()
+    inactive_owner_id_set = set(plan.inactive_owner_ids)
+    current_user_ids = set(session.exec(select(User.user_id)).all())
+    current_credential_user_ids = set(
+        session.exec(select(LocalCredential.user_id)).all()
+    )
+    current_owners, _, _ = _owned_user_ids(session)
+    if current_owners - current_user_ids:
+        raise ValueError("ownership became orphaned during import")
+    current_uncovered_owners = {
+        owner for owner in current_owners if owner not in current_credential_user_ids
+    }
+    if current_uncovered_owners != inactive_owner_id_set:
+        raise ValueError("inactive owner coverage changed during import")
+
+    current_identity_user_ids = set(session.exec(select(UserIdentity.user_id)).all())
+    current_token_user_ids = set(session.exec(select(AuthToken.user_id)).all())
+    current_session_user_ids = set(session.exec(select(AuthSession.user_id)).all())
+    if inactive_owner_id_set & (
+        current_credential_user_ids
+        | current_identity_user_ids
+        | current_token_user_ids
+        | current_session_user_ids
+    ):
+        raise ValueError("inactive owner received an authentication artifact")
+    if any(
+        session.get(User, inactive_owner_id).status != "inactive"
+        for inactive_owner_id in plan.inactive_owner_ids
+    ):
+        raise ValueError("inactive owner post-import assertion failed")
     return setup_tokens
 
 
@@ -650,6 +795,10 @@ def _print_plan(plan: ImportPlan, *, row_count: int) -> None:
     print(f"Users to create: {plan.users_to_create}")
     print(f"Identities to create: {plan.identities_to_create}")
     print(f"Credentials to create: {plan.credentials_to_create}")
+    print(
+        "Intentionally inactive owners without credentials: "
+        f"{plan.inactive_owner_count}"
+    )
     if plan.conflicts:
         print("Conflicts:", file=sys.stderr)
         for conflict in plan.conflicts:
@@ -673,6 +822,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--create-missing-users",
         action="store_true",
         help="Also create users that never signed in to Debriefly",
+    )
+    parser.add_argument(
+        "--inactive-owner-file",
+        type=Path,
+        help=(
+            "Private file containing the exact existing Debriefly owner IDs absent "
+            "from the Clerk export that will be marked inactive without local "
+            "credentials, one ID per line"
+        ),
     )
     setup_group = parser.add_mutually_exclusive_group()
     setup_group.add_argument(
@@ -706,6 +864,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"CSV validation failed: {exc}", file=sys.stderr)
         return 2
 
+    inactive_owner_ids: tuple[str, ...] = ()
+    if args.inactive_owner_file is not None:
+        try:
+            inactive_owner_ids = read_inactive_owner_ids(args.inactive_owner_file)
+        except (OSError, ValueError) as exc:
+            print(f"Inactive owner file validation failed: {exc}", file=sys.stderr)
+            return 2
+
     dotenv.load_dotenv()
     now = datetime.now(timezone.utc)
     setup_output_written = False
@@ -717,6 +883,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 rows,
                 issuer=args.issuer,
                 create_missing_users=args.create_missing_users,
+                inactive_owner_ids=inactive_owner_ids,
             )
             _print_plan(plan, row_count=len(rows))
             if not plan.can_commit:

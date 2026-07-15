@@ -88,15 +88,15 @@ failures. Before touching production:
    a `docker-pullable://` prefix to the equivalent `docker.io/` reference if
    needed, while preserving the digest exactly.
 2. In GitHub Actions, run **build Clerk rollback image**. Set `release_tag` to
-   `0.9.2`, supply the running image's immutable reference as
-   `clerk_base_image`, and use `0.9.2-clerk-rollback` as `output_tag`. The
+   `0.9.3`, supply the running image's immutable reference as
+   `clerk_base_image`, and use `0.9.3-clerk-rollback` as `output_tag`. The
    workflow pins the reviewed release tag, asserts the sole Alembic head, and
    refuses a base that is not the Clerk-backed `0.8.0` application.
 3. Record the new rollback image's immutable digest and confirm its
    `debriefly.rollback.base-image` label contains the exact running-pod digest.
    A tag alone is not a rollback artifact.
 4. Restore a recent production backup into an isolated staging PostgreSQL
-   database. Upgrade it with the `0.9.2` candidate, then start the prepared
+   database. Upgrade it with the `0.9.3` candidate, then start the prepared
    Clerk rollback image with the retained Clerk Secret against that upgraded
    database. Verify that startup succeeds, a Clerk test user can sign in, and
    its existing survey opens.
@@ -138,7 +138,7 @@ Then run:
 python3 scripts/apply_schema_migrations.py
 ```
 
-The `0.9.2` candidate includes both the reviewed human-interview revision
+The `0.9.3` candidate includes both the reviewed human-interview revision
 `a3f2b1c4d5e6` and local-auth revision `f6b7c8d9e0a1`; rehearse both features as
 one release. The command fails unless the database reaches the code's sole head
 and prints `Database schema is current at f6b7c8d9e0a1.` on success. The
@@ -235,6 +235,34 @@ Do not proceed unless the dry run reports no conflicts and every existing form
 or OpenAI-settings owner is covered. Reconcile any reported orphan against the
 final backup and source records; never assign it to a guessed user.
 
+If source records prove that an uncovered owner was intentionally deleted from
+Clerk and must remain inactive, create a private mode-`0600` file containing the
+exact inactive owner IDs, one per line. Add it to the short-lived import Secret
+as `inactive-owner-ids.txt`, mount it beside the CSV, and pass:
+
+```sh
+--inactive-owner-file /var/run/debriefly-import/inactive-owner-ids.txt
+```
+
+The complete dry-run command for this exceptional case is:
+
+```sh
+python scripts/import_clerk_users.py \
+  /var/run/debriefly-import/clerk-users.csv \
+  --issuer 'https://your-clerk-issuer.example' \
+  --inactive-owner-file /var/run/debriefly-import/inactive-owner-ids.txt
+```
+
+This is an exact allowlist, not a general bypass. The importer fails if the file
+omits any uncovered owner or contains an unknown, non-owner, or already-covered
+ID. Accepted inactive owners receive no identity or local credential. Their
+status becomes `inactive` and `auth_version` increments once to reject password
+setup and sessions, while their stable user IDs, roles, email metadata, forms,
+settings, responses, and ownership mappings remain unchanged. They cannot sign
+in without a later administrator-reviewed recovery. Never add a guessed ID or
+email, and never use this option merely to silence an unexplained dry-run
+conflict. Use the identical reviewed file for the dry run and commit.
+
 Create a second one-off Job from the same reviewed manifest and candidate
 digest, adding `--commit` and `--skip-setup-tokens` to its `args`. Because SMTP
 is configured, this avoids creating a file of raw one-time tokens. The equivalent
@@ -244,6 +272,18 @@ container command is:
 python scripts/import_clerk_users.py \
   /var/run/debriefly-import/clerk-users.csv \
   --issuer 'https://your-clerk-issuer.example' \
+  --commit \
+  --skip-setup-tokens
+```
+
+When the reviewed inactive-owner exception is used, the complete commit command
+must include the same file:
+
+```sh
+python scripts/import_clerk_users.py \
+  /var/run/debriefly-import/clerk-users.csv \
+  --issuer 'https://your-clerk-issuer.example' \
+  --inactive-owner-file /var/run/debriefly-import/inactive-owner-ids.txt \
   --commit \
   --skip-setup-tokens
 ```
