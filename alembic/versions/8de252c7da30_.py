@@ -146,6 +146,10 @@ def downgrade() -> None:
     op.drop_table("fieldvalue")
     op.drop_table("response")
     op.drop_table("field")
+    # PostgreSQL keeps named enum types after the table using them is dropped.
+    # Remove the type so a later upgrade from base can create it again.
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS fieldtype")
     op.drop_table("form")
     op.drop_table("user")
     op.drop_table("config")
