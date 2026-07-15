@@ -13,7 +13,9 @@ LABEL org.opencontainers.image.title="Debriefly Clerk rollback image" \
 WORKDIR /app
 
 # The rollback must use the same shared production database as the candidate.
-ENV DEBRIEFLY_REQUIRE_DATABASE_URL=true
+# Existing OpenShift deployments may supply either DB_URL or all four legacy
+# DB_USER/DB_PASS/DB_NAME/DB_HOST values.
+ENV DEBRIEFLY_REQUIRE_POSTGRESQL=true
 
 # Refuse an arbitrary or already-local-auth base even when it is digest-pinned.
 RUN grep -Fq '__version__ = "0.8.0"' /app/src/debriefly/__init__.py && \
@@ -23,7 +25,8 @@ RUN grep -Fq '__version__ = "0.8.0"' /app/src/debriefly/__init__.py && \
 # COPY merges these reviewed revisions over the migration directory in the
 # released image. Application source and its Clerk authentication remain from
 # CLERK_BASE_IMAGE. The configuration helper fixes 0.8.0's DB_URL precedence
-# bug, so this image cannot silently fall back to a pod-local SQLite database.
+# bug and requires PostgreSQL, so this image cannot silently fall back to a
+# pod-local SQLite database.
 COPY alembic/ /app/alembic/
 COPY alembic.ini /app/alembic.ini
 COPY rxconfig.py /app/rxconfig.py

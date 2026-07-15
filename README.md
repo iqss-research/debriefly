@@ -187,6 +187,12 @@ all pre-cutover runtime Secrets, including Clerk and any Azure settings,
 attached or preserved in the approved secret manager until the rollback window
 closes.
 
+The current NERC Deployment supplies PostgreSQL through `DB_HOST` plus the
+`DB_NAME`, `DB_USER`, and `DB_PASS` keys in `Secret/postgresql`. Preserve these
+references. The production image requires PostgreSQL but accepts this complete
+legacy configuration, so there is no need to decode the database password or
+repackage it as `DB_URL` for the authentication migration.
+
 For an ordinary release, select the imported tag under **Deployment -> Edit
 Deployment -> Images**. For an authentication migration, first complete the
 maintenance-window final export and one-off import in the migration runbook,

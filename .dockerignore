@@ -2,8 +2,10 @@ Dockerfile
 .git/
 .env
 .env.*
+*.env
 !.env.sample
 *.csv
+pre-cutover-deployment.yaml
 *.db
 *.db-*
 *.sqlite
