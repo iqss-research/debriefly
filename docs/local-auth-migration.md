@@ -361,7 +361,10 @@ checks this role for `/admin`, `/config`, and global-configuration mutations.
    account cannot sign into the Clerk rollback application. After that window
    closes, set `AUTH_ALLOW_REGISTRATION=true` only if public self-registration
    is desired, start a new rollout, and verify registration plus email
-   verification. Leave it false for an invitation-only deployment.
+   verification. Leave it false for an invitation-only deployment. Do not
+   enable public registration on version `0.9.3`: version `0.9.4` or newer is
+   required so registration stores no password until the email-token holder
+   verifies the address and chooses one.
 
 Schedule periodic cleanup after reviewing its dry run:
 

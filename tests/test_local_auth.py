@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 import reflex as rx
 from reflex.event import Event, get_hydrate_event
 
@@ -12,7 +13,12 @@ import debriefly.reflex.auth_api as auth_api
 import debriefly.reflex.auth_middleware as auth_middleware
 import debriefly.reflex.local_auth as local_auth
 from debriefly.reflex.backend.backend import MainState
-from debriefly.reflex.backend.models import AuthSession, LocalCredential, User
+from debriefly.reflex.backend.models import (
+    AuthSession,
+    AuthToken,
+    LocalCredential,
+    User,
+)
 from debriefly.reflex.pages.signin import _TOKEN_PAGE_META
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -32,7 +38,10 @@ def _configure(monkeypatch, *, production: bool = False):
     monkeypatch.delenv("AUTH_API_PUBLIC_URL", raising=False)
     monkeypatch.delenv("SMTP_HOST", raising=False)
     monkeypatch.delenv("SMTP_FROM", raising=False)
+    monkeypatch.setenv("AUTH_ALLOW_REGISTRATION", "true")
     local_auth.get_auth_settings.cache_clear()
+    with auth_api._attempts_lock:
+        auth_api._attempts.clear()
 
 
 def _engine(tmp_path):
@@ -52,7 +61,7 @@ def test_token_pages_preserve_origin_without_leaking_the_token_url():
     assert _TOKEN_PAGE_META == [{"name": "referrer", "content": "strict-origin"}]
 
 
-def test_migrated_style_password_setup_revokes_sessions(monkeypatch, tmp_path):
+def test_email_token_holder_replaces_any_legacy_pending_password(monkeypatch, tmp_path):
     _configure(monkeypatch)
     assert (
         local_auth.auth_api_endpoint("forgot-password")
@@ -62,25 +71,63 @@ def test_migrated_style_password_setup_revokes_sessions(monkeypatch, tmp_path):
     monkeypatch.setattr(local_auth.rx, "session", lambda: Session(engine))
 
     with Session(engine) as session:
-        pending = local_auth.register_local_user(
-            session, "Person@Example.ORG", "correct horse battery"
-        )
+        pending = local_auth.register_local_user(session, "Person@Example.ORG")
         session.commit()
         assert pending is not None
         user = session.exec(select(User)).one()
-        credential = session.get(LocalCredential, user.user_id)
-        assert credential is not None
-        assert credential.password_hash
-        assert "correct horse battery" not in credential.password_hash
+        assert session.get(LocalCredential, user.user_id) is None
         assert user.email_verified_at is None
+        assert user.status == "pending"
 
         verify_token = _token_from_email(pending.body)
-        assert local_auth.verify_email(session, verify_token)
+        with pytest.raises(local_auth.InvalidPassword):
+            local_auth.verify_email(
+                session,
+                verify_token,
+                "too short",
+                "too short",
+            )
+        with pytest.raises(local_auth.InvalidPassword):
+            local_auth.verify_email(
+                session,
+                verify_token,
+                "legitimate safe password",
+                "different safe password",
+            )
+        stored_token = session.exec(select(AuthToken)).one()
+        assert stored_token.used_at is None
+
+        # Simulate a pending account created by the vulnerable pre-email-first
+        # implementation. The email-token holder must replace this hash.
+        session.add(
+            LocalCredential(
+                user_id=user.user_id,
+                password_hash=local_auth.hash_password("attacker chosen password"),
+            )
+        )
         session.commit()
-        assert not local_auth.verify_email(session, verify_token)  # one-time
+        assert local_auth.verify_email(
+            session,
+            verify_token,
+            "legitimate safe password",
+            "legitimate safe password",
+        )
+        session.commit()
+        assert not local_auth.verify_email(
+            session,
+            verify_token,
+            "another legitimate password",
+            "another legitimate password",
+        )
+        assert (
+            local_auth.authenticate_password(
+                session, "person@example.org", "attacker chosen password"
+            )
+            is None
+        )
 
         result = local_auth.authenticate_password(
-            session, "person@example.org", "correct horse battery"
+            session, "person@example.org", "legitimate safe password"
         )
         assert result is not None
         _, raw_session = result
@@ -100,15 +147,15 @@ def test_migrated_style_password_setup_revokes_sessions(monkeypatch, tmp_path):
         assert local_auth.reset_password(
             session,
             reset_token,
-            "a different safe password",
-            "a different safe password",
+            "a different final password",
+            "a different final password",
         )
         session.commit()
         assert not local_auth.reset_password(
             session,
             reset_token,
-            "a different safe password",
-            "a different safe password",
+            "a different final password",
+            "a different final password",
         )
         stored_session = session.exec(select(AuthSession)).one()
         assert stored_session.revoked_at is not None
@@ -121,6 +168,52 @@ def test_migrated_style_password_setup_revokes_sessions(monkeypatch, tmp_path):
     )
 
 
+def test_migrated_verified_user_can_set_up_a_password(monkeypatch, tmp_path):
+    _configure(monkeypatch)
+    engine = _engine(tmp_path)
+    monkeypatch.setattr(local_auth.rx, "session", lambda: Session(engine))
+    now = local_auth._now()
+
+    with Session(engine) as session:
+        user = User(
+            user_id="user_migrated",
+            email_normalized="migrated@example.org",
+            email_verified_at=now,
+            status="active",
+            role="user",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(user)
+        session.add(LocalCredential(user_id=user.user_id))
+        session.commit()
+
+        # Registration stays non-enumerating and does not alter a verified user.
+        assert local_auth.register_local_user(session, "migrated@example.org") is None
+        assert session.exec(select(AuthToken)).first() is None
+
+        setup_email = local_auth.request_password_email(session, "migrated@example.org")
+        session.commit()
+        assert setup_email is not None
+        assert setup_email.purpose == local_auth.PASSWORD_SETUP
+        setup_token = _token_from_email(setup_email.body)
+        assert local_auth.reset_password(
+            session,
+            setup_token,
+            "migrated account password",
+            "migrated account password",
+        )
+        session.commit()
+        assert (
+            local_auth.authenticate_password(
+                session,
+                "migrated@example.org",
+                "migrated account password",
+            )
+            is not None
+        )
+
+
 def test_login_http_endpoint_sets_production_cookie_and_checks_origin(
     monkeypatch, tmp_path
 ):
@@ -128,15 +221,6 @@ def test_login_http_endpoint_sets_production_cookie_and_checks_origin(
     engine = _engine(tmp_path)
     monkeypatch.setattr(local_auth.rx, "session", lambda: Session(engine))
     monkeypatch.setattr(auth_api.rx, "session", lambda: Session(engine))
-
-    with Session(engine) as session:
-        pending = local_auth.register_local_user(
-            session, "person@example.org", "correct horse battery"
-        )
-        session.commit()
-        assert pending is not None
-        assert local_auth.verify_email(session, _token_from_email(pending.body))
-        session.commit()
 
     api = FastAPI()
     auth_api.register_auth_routes(api)
@@ -157,6 +241,87 @@ def test_login_http_endpoint_sets_production_cookie_and_checks_origin(
         "/forgot-password?error=email-not-configured"
     )
 
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+    monkeypatch.setenv("SMTP_FROM", "Debriefly <accounts@debriefly.example>")
+    sent = []
+
+    def capture_email(message):
+        sent.append(message)
+        return True
+
+    monkeypatch.setattr(auth_api, "send_auth_email", capture_email)
+
+    blocked_registration = client.post(
+        "/_event/auth/register",
+        data={"email": "person@example.org"},
+        headers={"Origin": "https://attacker.example"},
+        follow_redirects=False,
+    )
+    assert blocked_registration.status_code == 403
+
+    registration = client.post(
+        "/_event/auth/register",
+        data={
+            "email": "person@example.org",
+            # A stale 0.9.3 form may still submit these fields. They must never
+            # become an active credential before email ownership is proven.
+            "password": "attacker chosen password",
+            "password_confirm": "attacker chosen password",
+        },
+        headers={"Origin": "https://debriefly.example"},
+        follow_redirects=False,
+    )
+    assert registration.status_code == 303
+    assert registration.headers["location"].endswith("/signin?notice=check-email")
+    assert len(sent) == 1
+    verify_token = _token_from_email(sent[0].body)
+    with Session(engine) as session:
+        user = session.exec(select(User)).one()
+        assert user.status == "pending"
+        assert session.get(LocalCredential, user.user_id) is None
+
+    invalid_password = client.post(
+        "/_event/auth/verify",
+        data={
+            "token": verify_token,
+            "password": "legitimate safe password",
+            "password_confirm": "different safe password",
+        },
+        headers={"Origin": "https://debriefly.example"},
+        follow_redirects=False,
+    )
+    assert invalid_password.status_code == 303
+    invalid_location = urlparse(invalid_password.headers["location"])
+    invalid_query = parse_qs(invalid_location.query)
+    assert invalid_location.path == "/verify-email"
+    assert invalid_query["token"] == [verify_token]
+    assert invalid_query["error"] == ["invalid-password"]
+    with Session(engine) as session:
+        assert session.exec(select(AuthToken)).one().used_at is None
+        assert session.exec(select(User)).one().status == "pending"
+
+    verification = client.post(
+        "/_event/auth/verify",
+        data={
+            "token": verify_token,
+            "password": "legitimate safe password",
+            "password_confirm": "legitimate safe password",
+        },
+        headers={"Origin": "https://debriefly.example"},
+        follow_redirects=False,
+    )
+    assert verification.status_code == 303
+    assert verification.headers["location"].endswith("/signin?notice=verified")
+
+    attacker_login = client.post(
+        "/_event/auth/login",
+        data={"email": "person@example.org", "password": "attacker chosen password"},
+        headers={"Origin": "https://debriefly.example"},
+        follow_redirects=False,
+    )
+    assert attacker_login.status_code == 303
+    assert attacker_login.headers["location"].endswith("/signin?error=invalid")
+
     blocked = client.post(
         "/_event/auth/login",
         data={"email": "person@example.org", "password": "correct horse battery"},
@@ -169,7 +334,7 @@ def test_login_http_endpoint_sets_production_cookie_and_checks_origin(
         "/_event/auth/login",
         data={
             "email": "person@example.org",
-            "password": "correct horse battery",
+            "password": "legitimate safe password",
             "next": "/user",
         },
         headers={"Origin": "https://debriefly.example"},

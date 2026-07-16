@@ -289,6 +289,17 @@ def _issue_token(
     *,
     email_normalized: str | None = None,
 ) -> str:
+    # Consumers lock User -> AuthToken. Issuance must use the same order so a
+    # concurrent email request and token submission cannot deadlock.
+    locked_user = session.exec(
+        select(User)
+        .where(User.user_id == user.user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).first()
+    if locked_user is None:
+        raise RuntimeError("Cannot issue an authentication token for a missing user")
+    user = locked_user
     raw_token = secrets.token_urlsafe(32)
     now = _now()
     # A newly issued link supersedes every older link for the same operation.
@@ -336,22 +347,35 @@ def _email_link(path: str, raw_token: str) -> str:
 def register_local_user(
     session: Session,
     email: str,
-    password: str,
 ) -> PendingEmail | None:
     settings = require_auth_configuration()
     if not settings.allow_registration:
         raise PermissionError("New account registration is disabled.")
     normalized = normalize_email(email)
-    password_hash = hash_password(password)
     existing = session.exec(
-        select(User).where(User.email_normalized == normalized)
+        select(User)
+        .where(User.email_normalized == normalized)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).first()
 
     if existing is not None:
-        # Keep registration responses non-enumerating. A pending account may be
-        # sent a fresh verification link, but its password is never overwritten.
-        if existing.email_verified_at is not None or _recent_token_exists(
-            session, existing.user_id, VERIFY_EMAIL
+        # Keep registration responses non-enumerating. Only a pending account
+        # created by local registration may receive another verification link.
+        identity = session.exec(
+            select(UserIdentity).where(
+                UserIdentity.user_id == existing.user_id,
+                UserIdentity.provider == "local",
+                UserIdentity.issuer == settings.issuer,
+                UserIdentity.link_source == "registration",
+                UserIdentity.email_normalized == normalized,
+            )
+        ).first()
+        if (
+            existing.status != "pending"
+            or existing.email_verified_at is not None
+            or identity is None
+            or _recent_token_exists(session, existing.user_id, VERIFY_EMAIL)
         ):
             return None
         raw_token = _issue_token(
@@ -371,13 +395,6 @@ def register_local_user(
         )
         session.add(user)
         session.flush()
-        session.add(
-            LocalCredential(
-                user_id=user.user_id,
-                password_hash=password_hash,
-                password_changed_at=now,
-            )
-        )
         session.add(
             UserIdentity(
                 user_id=user.user_id,
@@ -401,15 +418,22 @@ def register_local_user(
         purpose=VERIFY_EMAIL,
         subject="Verify your Debriefly account",
         body=(
-            "Verify your Debriefly email address using this one-time link:\n\n"
-            f"{link}\n\nThis link expires in {settings.token_hours} hours."
+            "Verify your Debriefly email address and choose your password using "
+            "this one-time link:\n\n"
+            f"{link}\n\nThis link expires in {settings.token_hours} hours. "
+            "No password is active until you complete this step."
         ),
     )
 
 
 def request_password_email(session: Session, email: str) -> PendingEmail | None:
     normalized = normalize_email(email)
-    user = session.exec(select(User).where(User.email_normalized == normalized)).first()
+    user = session.exec(
+        select(User)
+        .where(User.email_normalized == normalized)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).first()
     if user is None or user.email_verified_at is None or user.status != "active":
         return None
     credential = session.get(LocalCredential, user.user_id)
@@ -433,28 +457,75 @@ def request_password_email(session: Session, email: str) -> PendingEmail | None:
     )
 
 
-def verify_email(session: Session, raw_token: str) -> bool:
-    token = _valid_token(session, raw_token, {VERIFY_EMAIL})
-    if token is None:
+def verify_email(
+    session: Session,
+    raw_token: str,
+    password: str,
+    confirmation: str,
+) -> bool:
+    validate_password(password)
+    if not hmac.compare_digest(password, confirmation):
+        raise InvalidPassword("Passwords do not match.")
+    settings = require_auth_configuration()
+    locked = _locked_valid_token_and_user(session, raw_token, {VERIFY_EMAIL})
+    if locked is None:
         return False
-    user = session.get(User, token.user_id)
-    if user is None or user.email_normalized != token.email_normalized:
+    token, user = locked
+    if (
+        user is None
+        or user.status != "pending"
+        or user.email_verified_at is not None
+        or user.email_normalized != token.email_normalized
+    ):
         return False
+    identity = session.exec(
+        select(UserIdentity)
+        .where(
+            UserIdentity.user_id == user.user_id,
+            UserIdentity.provider == "local",
+            UserIdentity.issuer == settings.issuer,
+            UserIdentity.link_source == "registration",
+            UserIdentity.email_normalized == user.email_normalized,
+        )
+        .with_for_update()
+    ).first()
+    if identity is None:
+        return False
+
+    # Hash only after the one-time token and its pending local identity have
+    # been validated. Overwriting an old pending hash also repairs accounts
+    # created by the pre-email-first registration flow.
+    password_hash = _argon_hash(password)
     now = _now()
     token.used_at = now
     user.email_verified_at = now
     user.status = "active"
+    user.auth_version += 1
     user.updated_at = now
-    identity = session.exec(
-        select(UserIdentity).where(
-            UserIdentity.user_id == user.user_id,
-            UserIdentity.provider == "local",
-        )
+    identity.email_verified_at = now
+    credential = session.exec(
+        select(LocalCredential)
+        .where(LocalCredential.user_id == user.user_id)
+        .with_for_update()
     ).first()
-    if identity is not None:
-        identity.email_verified_at = now
+    if credential is None:
+        credential = LocalCredential(user_id=user.user_id)
+    credential.password_hash = password_hash
+    credential.password_changed_at = now
+    credential.failed_attempts = 0
+    credential.locked_until = None
+    for auth_session in session.exec(
+        select(AuthSession).where(
+            AuthSession.user_id == user.user_id,
+            AuthSession.revoked_at.is_(None),
+        )
+    ):
+        auth_session.revoked_at = now
+        session.add(auth_session)
     session.add(token)
     session.add(user)
+    session.add(identity)
+    session.add(credential)
     return True
 
 
@@ -467,14 +538,33 @@ def reset_password(
     validate_password(password)
     if not hmac.compare_digest(password, confirmation):
         raise InvalidPassword("Passwords do not match.")
-    token = _valid_token(session, raw_token, {PASSWORD_RESET, PASSWORD_SETUP})
-    if token is None:
+    locked = _locked_valid_token_and_user(
+        session,
+        raw_token,
+        {PASSWORD_RESET, PASSWORD_SETUP},
+    )
+    if locked is None:
         return False
-    user = session.get(User, token.user_id)
-    if user is None or user.status != "active":
+    token, user = locked
+    if (
+        user is None
+        or user.status != "active"
+        or user.email_verified_at is None
+        or user.email_normalized != token.email_normalized
+    ):
         return False
     now = _now()
-    credential = session.get(LocalCredential, user.user_id)
+    credential = session.exec(
+        select(LocalCredential)
+        .where(LocalCredential.user_id == user.user_id)
+        .with_for_update()
+    ).first()
+    if token.purpose == PASSWORD_RESET and (
+        credential is None or not credential.password_hash
+    ):
+        return False
+    if token.purpose == PASSWORD_SETUP and credential and credential.password_hash:
+        return False
     if credential is None:
         credential = LocalCredential(user_id=user.user_id)
     credential.password_hash = _argon_hash(password)
@@ -484,6 +574,14 @@ def reset_password(
     token.used_at = now
     user.auth_version += 1
     user.updated_at = now
+    for sibling in session.exec(
+        select(AuthToken).where(
+            AuthToken.user_id == user.user_id,
+            AuthToken.used_at.is_(None),
+        )
+    ):
+        sibling.used_at = now
+        session.add(sibling)
     for auth_session in session.exec(
         select(AuthSession).where(
             AuthSession.user_id == user.user_id,
@@ -498,29 +596,49 @@ def reset_password(
     return True
 
 
-def _valid_token(
+def _locked_valid_token_and_user(
     session: Session,
     raw_token: str,
     purposes: set[str],
-) -> AuthToken | None:
+) -> tuple[AuthToken, User] | None:
+    """Lock a token's user first, then the token, and revalidate both rows.
+
+    A consistent user-before-token lock order makes one-time consumption safe
+    when two different links for the same account are submitted concurrently.
+    """
     if not raw_token or len(raw_token) > 512:
         return None
-    try:
-        digest = _token_digest(raw_token)
-    except AuthConfigurationError:
-        return None
-    token = session.exec(
-        select(AuthToken).where(
+    digest = _token_digest(raw_token)
+    candidate_user_id = session.exec(
+        select(AuthToken.user_id).where(
             AuthToken.token_digest == digest,
             AuthToken.purpose.in_(purposes),
+            AuthToken.used_at.is_(None),
         )
     ).first()
-    if token is None or token.used_at is not None:
+    if candidate_user_id is None:
+        return None
+    user = session.exec(
+        select(User).where(User.user_id == candidate_user_id).with_for_update()
+    ).first()
+    if user is None:
+        return None
+    token = session.exec(
+        select(AuthToken)
+        .where(
+            AuthToken.token_digest == digest,
+            AuthToken.user_id == user.user_id,
+            AuthToken.purpose.in_(purposes),
+            AuthToken.used_at.is_(None),
+        )
+        .with_for_update()
+    ).first()
+    if token is None:
         return None
     expires_at = _aware(token.expires_at)
     if expires_at is None or expires_at <= _now():
         return None
-    return token
+    return token, user
 
 
 def authenticate_password(

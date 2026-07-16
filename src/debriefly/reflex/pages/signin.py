@@ -40,7 +40,7 @@ class AuthPageState(rx.State):
                 "The email or password is incorrect. If your account was migrated, "
                 "use “Set up or reset password” below."
             ),
-            "invalid-input": "Enter a valid email and a password of at least 12 characters.",
+            "invalid-input": "Enter a valid email address.",
             "invalid-password": "Use matching passwords of at least 12 characters.",
             "password-match": "The passwords do not match.",
             "invalid-link": "This one-time link is invalid, expired, or already used.",
@@ -54,9 +54,14 @@ class AuthPageState(rx.State):
             "disabled": "New account registration is currently disabled.",
         }
         notice_messages = {
-            "check-email": "Check your email for a verification link. Existing accounts are not disclosed.",
+            "check-email": (
+                "Check your email for a link to verify your address and choose "
+                "a password. Existing accounts are not disclosed."
+            ),
             "password-email": "If that account exists, a one-time password link has been sent.",
-            "verified": "Your email is verified. You can sign in now.",
+            "verified": (
+                "Your email is verified and your password is saved. You can sign in now."
+            ),
             "password-updated": "Your password has been saved. All older sessions were revoked.",
             "signed-out": "You have been signed out.",
         }
@@ -209,19 +214,7 @@ def register() -> rx.Component:
     form = rx.el.form(
         rx.vstack(
             _auth_input("Email", "email", type_="email", autocomplete="email"),
-            _auth_input(
-                "Password (12+ characters)",
-                "password",
-                type_="password",
-                autocomplete="new-password",
-            ),
-            _auth_input(
-                "Confirm password",
-                "password_confirm",
-                type_="password",
-                autocomplete="new-password",
-            ),
-            rx.button("Create account", type="submit", width="100%"),
+            rx.button("Send verification link", type="submit", width="100%"),
             rx.link("Back to sign in", href=SIGN_IN_ROUTE),
             spacing="4",
             width="100%",
@@ -232,7 +225,7 @@ def register() -> rx.Component:
     )
     return _auth_shell(
         "Create an account",
-        "We will send a one-time link to verify your email address.",
+        "We will email a one-time link. Open it to verify your address and choose your password.",
         form,
     )
 
@@ -329,7 +322,23 @@ def verify_email_page() -> rx.Component:
                 name="token",
                 value=AuthPageState.reset_token,
             ),
-            rx.button("Verify email", type="submit", width="100%"),
+            _auth_input(
+                "Password (12+ characters)",
+                "password",
+                type_="password",
+                autocomplete="new-password",
+            ),
+            _auth_input(
+                "Confirm password",
+                "password_confirm",
+                type_="password",
+                autocomplete="new-password",
+            ),
+            rx.button(
+                "Verify email and create account",
+                type="submit",
+                width="100%",
+            ),
             rx.link("Back to sign in", href=SIGN_IN_ROUTE),
             spacing="4",
             width="100%",
@@ -339,8 +348,8 @@ def verify_email_page() -> rx.Component:
         width="100%",
     )
     return _auth_shell(
-        "Verify your email",
-        "Confirm this one-time link to activate your Debriefly account.",
+        "Verify your email and choose a password",
+        "Your account becomes active only after you save a password here.",
         rx.cond(
             AuthPageState.reset_token != "",
             form,

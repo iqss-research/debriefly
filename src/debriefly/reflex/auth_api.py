@@ -162,24 +162,22 @@ def register_auth_routes(api: FastAPI) -> None:
     def register(
         request: Request,
         email: Annotated[str, Form()] = "",
-        password: Annotated[str, Form()] = "",
-        password_confirm: Annotated[str, Form()] = "",
     ):
         if not _post_allowed(request):
             return _forbidden()
         if not auth_email_delivery_configured():
             return _redirect("/register", error="email-not-configured")
-        if len(email) > 320 or len(password) > 1024 or len(password_confirm) > 1024:
+        if len(email) > 320:
             return _redirect("/register", error="invalid-input")
+        if _limited(request, "register-ip", 30, 60 * 60):
+            return _redirect("/register", error="rate-limited")
         if _limited(request, "register", 6, 60 * 60, identifier=email):
             return _redirect("/register", error="rate-limited")
-        if password != password_confirm:
-            return _redirect("/register", error="password-match")
         try:
             with rx.session() as session:
-                pending = register_local_user(session, email, password)
+                pending = register_local_user(session, email)
                 session.commit()
-        except (ValueError, InvalidPassword):
+        except ValueError:
             return _redirect("/register", error="invalid-input")
         except PermissionError:
             return _redirect("/register", error="disabled")
@@ -225,24 +223,35 @@ def register_auth_routes(api: FastAPI) -> None:
     def verify(
         request: Request,
         token: Annotated[str, Form()] = "",
+        password: Annotated[str, Form()] = "",
+        password_confirm: Annotated[str, Form()] = "",
     ):
         if not _post_allowed(request):
             return _forbidden()
-        if len(token) > 512 or _limited(
-            request, "verify", 20, 60 * 60, identifier=token
-        ):
+        if len(token) > 512:
             return _redirect("/signin", error="invalid-link")
+        if len(password) > 1024 or len(password_confirm) > 1024:
+            return _redirect("/verify-email", token=token, error="invalid-password")
+        if _limited(request, "verify", 20, 60 * 60, identifier=token):
+            return _redirect("/verify-email", token=token, error="rate-limited")
         success = False
         try:
             with rx.session() as session:
-                success = verify_email(session, token)
+                success = verify_email(
+                    session,
+                    token,
+                    password,
+                    password_confirm,
+                )
                 session.commit()
+        except (InvalidPassword, ValueError):
+            return _redirect("/verify-email", token=token, error="invalid-password")
         except AuthConfigurationError:
             logger.exception("Local authentication is not configured")
-        return _redirect(
-            "/signin",
-            **({"notice": "verified"} if success else {"error": "invalid-link"}),
-        )
+            return _redirect("/verify-email", token=token, error="configuration")
+        if not success:
+            return _redirect("/signin", error="invalid-link")
+        return _redirect("/signin", notice="verified")
 
     @api.post(f"{_AUTH_PREFIX}/reset-password", include_in_schema=False)
     def reset(
