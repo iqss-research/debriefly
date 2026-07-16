@@ -256,6 +256,8 @@ class Field(rx.Model, table=True):
     required: bool = False
     bundled: bool = False
     debriefing: bool = False
+    # Retained only for compatibility with the existing migration history and
+    # rollback images. Human interview behavior is not exposed by the app.
     interviewer_mode: bool = False
     allow_back: bool = False
     min_debriefing_time: Optional[int] = None
@@ -379,6 +381,8 @@ class Response(rx.Model, table=True):
 
 
 class HumanChatMessage(rx.Model, table=True):
+    """Legacy storage retained for schema and rollback compatibility only."""
+
     __tablename__ = "human_chat_message"
 
     id: int = sqlmodel.Field(primary_key=True)

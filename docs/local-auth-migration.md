@@ -138,12 +138,13 @@ Then run:
 python3 scripts/apply_schema_migrations.py
 ```
 
-The `0.9.3` candidate includes both the reviewed human-interview revision
-`a3f2b1c4d5e6` and local-auth revision `f6b7c8d9e0a1`; rehearse both features as
-one release. The command fails unless the database reaches the code's sole head
-and prints `Database schema is current at f6b7c8d9e0a1.` on success. The
-revisions after the currently deployed `dc22fdc7aa86` head are additive. The
-old Clerk-backed release can keep serving while the new tables exist.
+The migration chain includes the legacy human-interview revision
+`a3f2b1c4d5e6` and local-auth revision `f6b7c8d9e0a1`. The application no
+longer exposes human interview mode, but the legacy revision must remain in the
+chain for existing databases and rollback images. The command fails unless the
+database reaches the code's sole head and prints
+`Database schema is current at f6b7c8d9e0a1.` on success. The revisions after
+the previously deployed `dc22fdc7aa86` head are additive.
 
 ## Final maintenance-window export and import
 
@@ -347,7 +348,8 @@ checks this role for `/admin`, `/config`, and global-configuration mutations.
 2. Verify a migrated account can request a setup link, set a password, sign in,
    see its original surveys, and sign out.
 3. Verify a second account cannot open the first account's form, field,
-   response, export, analysis, or interview-session URLs.
+   response, export, or analysis URLs, and verify the retired `/interview`
+   routes are unavailable.
 4. Verify registration is blocked while `AUTH_ALLOW_REGISTRATION=false`, and
    verify forgotten-password, expiration, one-time token replay rejection,
    account lockout, and session revocation.

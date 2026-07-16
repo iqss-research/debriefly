@@ -215,9 +215,6 @@ def _sidebar_content(
             spacing="1",
             width="100%",  # Ensure full width
         ),
-        maybe_close(
-            sidebar_item("Interview Sessions", "/interview", "messages-square")
-        ),
         maybe_close(sidebar_item("Feedback", "/feedback", "message_square")),
         maybe_close(sidebar_item("OpenAI Key", "/user", "key")),
         rx.spacer(),

@@ -41,7 +41,6 @@ tooltips = {
     "bundle_items": "The subquestions or row labels respondents will answer under the main question.",
     "minimum_time": "The minimum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the participants can finish the conversation.",
     "maximum_time": "The maximum time (in minutes) for survey participants to spend on debriefing (conversation with LLM). After this time, the conversation will be ended automatically.",
-    "interviewer_mode": "If checked, a human researcher will respond to the participant instead of the LLM. The researcher accesses the live session from /interview.",
     "system_prompt": "Edit the system prompt that governs the LLM behavior (Caution: you must check if your prompt works well in your context).",
     "system_prompt_edit": "Edit the system prompt that governs the LLM behavior. You must include the instruction about {{end_of_survey_token}}, which is the token that indicates the end of the survey. You are NOT allowed to create system prompts that are not for the cognitive debriefing.",
     "initial_message_edit": "Edit the initial message that the assistant will send to the user at first. You must include the token {{question}}, which is the token that will be replaced by the question text.",
@@ -208,12 +207,9 @@ class FieldEditorState(AppState):
         sys_prompt = form_data.get("custom_system_message", "").strip()
         init_msg = form_data.get("custom_initial_message", "").strip()
         is_debriefing = bool(form_data.get("debriefing")) or self.field.debriefing
-        is_interviewer = (
-            bool(form_data.get("interviewer_mode")) or self.field.interviewer_mode
-        )
 
-        # run compliance checks only for LLM debriefing (not human interviewer mode)
-        if is_debriefing and not is_interviewer:
+        # Every debriefing is automated, so all custom prompts are checked.
+        if is_debriefing:
             with rx.session() as session:
                 settings = UserOpenAISettings.get_for_user(session, self.user_id)
 
@@ -254,7 +250,6 @@ class FieldEditorState(AppState):
             self.field.required = bool(form_data.get("required"))
             self.field.bundled = bool(form_data.get("bundled"))
             self.field.debriefing = bool(form_data.get("debriefing"))
-            self.field.interviewer_mode = bool(form_data.get("interviewer_mode"))
 
         if "custom_system_message" in form_data:
             self.field.custom_system_message = form_data[
@@ -472,11 +467,6 @@ class FieldEditorState(AppState):
         self.field.debriefing = is_checked
         if is_checked:
             self.field.required = True
-        if not is_checked:
-            self.field.interviewer_mode = False
-
-    def handle_interviewer_mode_change(self, is_checked: bool):
-        self.field.interviewer_mode = is_checked
 
     def reset_system_prompt(self):
         """Clear the override so the default template shows again."""
@@ -799,8 +789,7 @@ def field_editor():
                                     content=tooltips["debriefing"],
                                 ),
                                 rx.cond(
-                                    FieldEditorState.field.debriefing
-                                    & ~FieldEditorState.field.interviewer_mode,
+                                    FieldEditorState.field.debriefing,
                                     rx.button(
                                         "Edit System Prompts",
                                         on_click=FieldEditorState.toggle_prompt_editor,
@@ -810,30 +799,13 @@ def field_editor():
                                     ),
                                 ),
                                 rx.cond(
-                                    FieldEditorState.field.debriefing
-                                    & ~FieldEditorState.field.interviewer_mode,
+                                    FieldEditorState.field.debriefing,
                                     rx.tooltip(
                                         rx.icon("info", size=16),
                                         content=tooltips["system_prompt"],
                                     ),
                                 ),
                                 align="center",
-                            ),
-                            rx.cond(
-                                FieldEditorState.field.debriefing,
-                                rx.hstack(
-                                    rx.checkbox(
-                                        "Human Interviewer Mode",
-                                        name="interviewer_mode",
-                                        checked=FieldEditorState.field.interviewer_mode,
-                                        on_change=FieldEditorState.handle_interviewer_mode_change,
-                                    ),
-                                    rx.tooltip(
-                                        rx.icon("info", size=16),
-                                        content=tooltips["interviewer_mode"],
-                                    ),
-                                    align="center",
-                                ),
                             ),
                             # Minimum Time input for debriefing
                             rx.cond(

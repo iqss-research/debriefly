@@ -52,6 +52,17 @@ def field_type_value(field: Field) -> str:
     return field.type_.value if isinstance(field.type_, FieldType) else str(field.type_)
 
 
+def _enforce_automated_debriefing(field: Field) -> Field:
+    """Clear a client-provided legacy human-interview flag."""
+    field.interviewer_mode = False
+    return field
+
+
+def _has_retired_human_interview(form: Form) -> bool:
+    """Return whether a legacy survey requires an explicit conversion."""
+    return any(field.interviewer_mode for field in form.fields)
+
+
 class FormEditorState(AppState):
     form: Form = Form()
     temp_name: str = ""
@@ -139,6 +150,9 @@ class FormEditorState(AppState):
         field.pop("options", None)  # Remove options, relationship
         field.pop("bundle_items", None)  # Remove relationship
         field = Field(**field)
+        # Human interview mode is retired. Never trust a client-provided
+        # legacy flag when creating or updating a question.
+        field = _enforce_automated_debriefing(field)
         with rx.session() as session:
             form = _get_owned_form(session, self.form.id, self.user_id)
             if form is None:
@@ -161,7 +175,6 @@ class FormEditorState(AppState):
                 existing_field.required = field.required
                 existing_field.bundled = field.bundled
                 existing_field.debriefing = field.debriefing
-                existing_field.interviewer_mode = field.interviewer_mode
                 existing_field.allow_back = field.allow_back
                 existing_field.prompt = field.prompt
                 existing_field.custom_system_message = field.custom_system_message
@@ -281,6 +294,12 @@ class FormEditorState(AppState):
             if original_form is None:
                 yield rx.toast.error("Survey not found.")
                 return
+            if _has_retired_human_interview(original_form):
+                yield rx.toast.error(
+                    "This survey contains a retired human interview setting "
+                    "and cannot be copied automatically."
+                )
+                return
 
             # Create a new form with the same fields and a new name
             new_form = Form(
@@ -303,7 +322,6 @@ class FormEditorState(AppState):
                     required=field.required,
                     bundled=field.bundled,
                     debriefing=field.debriefing,
-                    interviewer_mode=field.interviewer_mode,
                     allow_back=field.allow_back,
                     min_debriefing_time=field.min_debriefing_time,
                     max_debriefing_time=field.max_debriefing_time,

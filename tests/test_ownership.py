@@ -1,9 +1,6 @@
 from sqlmodel import Session, SQLModel, create_engine
 
 from debriefly.reflex.backend.models import Field, FieldValue, Form, Response, User
-from debriefly.reflex.components.interview.state import (
-    _get_owned_interview_field_value,
-)
 from debriefly.reflex.form_designer.components.form_editor import (
     _get_owned_field,
     _get_owned_form,
@@ -99,14 +96,5 @@ def test_owned_resource_queries_reject_cross_user_ids(tmp_path):
                 form_id=rows["owner_form"],
                 user_id="owner",
             )
-            is not None
-        )
-
-        assert (
-            _get_owned_interview_field_value(session, rows["other_value"], "owner")
-            is None
-        )
-        assert (
-            _get_owned_interview_field_value(session, rows["owner_value"], "owner")
             is not None
         )

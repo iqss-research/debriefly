@@ -14,8 +14,6 @@ if "form_id" not in rx.State.__fields__:
     rx.State.add_var("form_id", str, "")
 if "field_id" not in rx.State.__fields__:
     rx.State.add_var("field_id", str, "")
-if "interview_session_id" not in rx.State.__fields__:
-    rx.State.add_var("interview_session_id", str, "")
 
 
 app = rx.App(

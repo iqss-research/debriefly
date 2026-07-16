@@ -788,14 +788,14 @@ def revoke_cookie_session(session: Session, raw_token: str | None) -> None:
         session.add(auth_session)
 
 
-def send_auth_email(message: PendingEmail | None) -> bool:
-    """Send one auth email without ever logging its one-time link."""
+def send_smtp_email(message: PendingEmail | None) -> bool:
+    """Send one plain-text email without logging its contents."""
     if message is None:
         return True
     host = os.getenv("SMTP_HOST", "").strip()
     sender = os.getenv("SMTP_FROM", "").strip()
     if not auth_email_delivery_configured():
-        logger.error("SMTP_HOST and SMTP_FROM are required to send auth email")
+        logger.error("SMTP_HOST and SMTP_FROM are required to send email")
         return False
     port = int(os.getenv("SMTP_PORT", "465" if _env_bool("SMTP_SSL", False) else "587"))
     username = os.getenv("SMTP_USERNAME", "")
@@ -819,8 +819,13 @@ def send_auth_email(message: PendingEmail | None) -> bool:
             client.send_message(email)
         return True
     except (OSError, smtplib.SMTPException):
-        logger.exception("Failed to send authentication email")
+        logger.exception("Failed to send email")
         return False
+
+
+def send_auth_email(message: PendingEmail | None) -> bool:
+    """Send one auth email without ever logging its one-time link."""
+    return send_smtp_email(message)
 
 
 def invalidate_unsent_email(message: PendingEmail | None) -> None:
