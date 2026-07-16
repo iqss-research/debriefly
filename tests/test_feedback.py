@@ -151,6 +151,7 @@ def test_feedback_submission_failure_preserves_form(monkeypatch):
     assert state.message == "The request should remain after an SMTP failure."
     assert state.sending is False
     assert "could not be emailed" in state.error
+    assert "GitHub" not in state.error
 
 
 def test_anonymous_feedback_is_not_sent(monkeypatch):
@@ -186,7 +187,8 @@ def test_feedback_page_renders_form_without_exposing_recipient():
     markup = str(feedback.feedback_page)
 
     assert "Send request" in markup
-    assert "Open GitHub Issues" in markup
+    assert "Open GitHub Issues" not in markup
+    assert "github.com/iqss-research/debriefly" not in markup
     assert "mailto:" not in markup
     assert feedback.FEEDBACK_RECIPIENT not in markup
 

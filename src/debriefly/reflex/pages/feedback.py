@@ -170,10 +170,7 @@ class FeedbackState(MainState):
             self.sending = False
 
         if not sent:
-            self.error = (
-                "Your request could not be emailed. Please try again later or "
-                "use GitHub Issues."
-            )
+            self.error = "Your request could not be emailed. Please try again later."
             yield rx.toast.error(self.error)
             return
 
@@ -274,17 +271,6 @@ def feedback_page() -> rx.Component:
                 reset_on_submit=False,
                 width="100%",
             ),
-            rx.divider(),
-            # rx.text("For public bug reports and code contributions:"),
-            # rx.link(
-            #    rx.button("Open GitHub Issues", variant="outline"),
-            #    href="https://github.com/iqss-research/debriefly/issues",
-            #    is_external=True,
-            #    text_decoration="none",
-            # ),
-            # width="100%",
-            # align_items="flex_start",
-            # spacing="4",
         ),
         width="100%",
         max_width="48rem",
