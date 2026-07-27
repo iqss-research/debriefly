@@ -46,6 +46,27 @@ tooltips = {
     "initial_message_edit": "Edit the initial message that the assistant will send to the user at first. You must include the token {{question}}, which is the token that will be replaced by the question text.",
 }
 
+_FIELD_EDITOR_MUTABLE_FIELDS = (
+    "name",
+    "type_",
+    "required",
+    "bundled",
+    "debriefing",
+    "min_debriefing_time",
+    "max_debriefing_time",
+    "prompt",
+    "custom_system_message",
+    "custom_initial_message",
+    "scale_min",
+    "scale_max",
+)
+
+
+def _copy_pending_field_values(source: Field, target: Field) -> None:
+    """Copy editable scalar values without trusting IDs or relationships."""
+    for field_name in _FIELD_EDITOR_MUTABLE_FIELDS:
+        setattr(target, field_name, getattr(source, field_name))
+
 
 class FieldEditorState(AppState):
     """Handle editing of a single field."""
@@ -122,24 +143,24 @@ class FieldEditorState(AppState):
             return None
 
         self.form_owner_id = form.user_id
-        if (
-            self.field.id is not None
-            and _get_owned_field(
+        if self.field.id is None:
+            field = Field(form_id=form.id)
+            _copy_pending_field_values(self.field, field)
+            session.add(field)
+        else:
+            field = _get_owned_field(
                 session,
                 field_id=self.field.id,
                 form_id=form.id,
                 user_id=self.user_id,
             )
-            is None
-        ):
-            return None
+            if field is None:
+                return None
+            _copy_pending_field_values(self.field, field)
 
-        # Keep the in-progress editor values, but pin their parent to the
-        # server-authorized route form before persisting any child changes.
-        self.field.form_id = form.id
-        session.add(self.field)
+        field.form_id = form.id
         session.flush()
-        return self.field
+        return field
 
     def handle_submit(self, form_data: dict[str, str]):
         if self.field.type_ == FieldType.static:
