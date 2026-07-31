@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI
@@ -166,6 +167,47 @@ def test_email_token_holder_replaces_any_legacy_pending_password(monkeypatch, tm
         )
         is None
     )
+
+
+def test_resolved_user_remains_readable_after_last_seen_commit(monkeypatch, tmp_path):
+    _configure(monkeypatch)
+    engine = _engine(tmp_path)
+    monkeypatch.setattr(local_auth.rx, "session", lambda: Session(engine))
+    now = local_auth._now()
+    raw_session = "active-browser-session"
+
+    with Session(engine) as session:
+        user = User(
+            user_id="user_active",
+            email_normalized="active@example.org",
+            email_verified_at=now,
+            status="active",
+            role="user",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(user)
+        session.add(
+            AuthSession(
+                user_id=user.user_id,
+                token_digest=local_auth._token_digest(raw_session),
+                auth_version=user.auth_version,
+                created_at=now - timedelta(hours=1),
+                last_seen_at=now - timedelta(minutes=10),
+                expires_at=now + timedelta(hours=1),
+            )
+        )
+        session.commit()
+
+    cookie_name = local_auth.get_auth_settings().cookie_name
+    resolved = local_auth.resolve_cookie_session(
+        f"{cookie_name}={raw_session}", origin="http://localhost:3000"
+    )
+
+    assert resolved is not None
+    # These reads happen after resolve_cookie_session's DB context has closed.
+    assert resolved.user_id == "user_active"
+    assert resolved.email_normalized == "active@example.org"
 
 
 def test_migrated_verified_user_can_set_up_a_password(monkeypatch, tmp_path):

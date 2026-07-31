@@ -27,6 +27,9 @@ from debriefly.reflex.form_designer import routes
 import asyncio
 
 logger = logging.getLogger(__name__)
+_TIMER_UPDATE_SECONDS = 5
+_STREAM_UPDATE_SECONDS = 0.1
+_STREAM_UPDATE_CHARS = 80
 
 
 def _first_present(mapping: dict, keys: tuple[str, ...], default: str = "") -> str:
@@ -110,6 +113,7 @@ class ChatState(rx.State):
     last_activity_time: float = 0.0  # timestamp of last keystroke
     elapsed_time: int = 0  # accumulated seconds
     paused: bool = False  # true when idle > 60s
+    timer_running: bool = False
 
     @rx.var
     def elapsed_time_str(self) -> str:
@@ -128,37 +132,45 @@ class ChatState(rx.State):
 
     @rx.background
     async def count_time(self):
-        while not self.done:
-            now = time.time()
-            idle = now - self.last_activity_time
-            async with self:
-                if idle >= 120:
-                    # user idle: pause timer
-                    self.paused = True
-                else:
-                    # not idle: tick once per second
-                    if not self.paused:
-                        self.elapsed_time += 1
-                        # console trace
-                        logger.info(
-                            f"[chat {self.client_token}] "
-                            f"elapsed={self.elapsed_time}s "
-                            f"(min={self.field.min_debriefing_time}, "
-                            f"max={self.field.max_debriefing_time}, "
-                            f"paused={self.paused})"
+        async with self:
+            if self.timer_running:
+                return
+            self.timer_running = True
+        try:
+            while True:
+                await asyncio.sleep(_TIMER_UPDATE_SECONDS)
+                async with self:
+                    if self.done:
+                        return
+                    now = time.time()
+                    idle = now - self.last_activity_time
+                    if idle >= 120:
+                        self.paused = True
+                    else:
+                        self.paused = False
+                        self.elapsed_time = min(
+                            self.elapsed_time + _TIMER_UPDATE_SECONDS,
+                            int(self.field.max_debriefing_time or 2**31),
                         )
-                        # show finish/force-finish as before, but based on elapsed_time
-                        if self.elapsed_time > self.field.min_debriefing_time:
-                            self.paused = False
-                            self.show_finish = True
-                        if (
-                            self.field.max_debriefing_time > 0
-                            and self.elapsed_time >= self.field.max_debriefing_time
-                        ):
-                            self.show_finish = False
-                            self.show_force_finish = True
-                            self.paused = False
-            await asyncio.sleep(1)
+                    if self.elapsed_time >= self.field.min_debriefing_time:
+                        self.show_finish = True
+                    if (
+                        self.field.max_debriefing_time > 0
+                        and self.elapsed_time >= self.field.max_debriefing_time
+                    ):
+                        self.show_finish = False
+                        self.show_force_finish = True
+                    logger.debug(
+                        "[chat %s] elapsed=%ss (min=%s, max=%s, paused=%s)",
+                        self.client_token,
+                        self.elapsed_time,
+                        self.field.min_debriefing_time,
+                        self.field.max_debriefing_time,
+                        self.paused,
+                    )
+        finally:
+            async with self:
+                self.timer_running = False
 
     async def on_load(self):
         logger.info("ChatState on_load")
@@ -211,7 +223,30 @@ class ChatState(rx.State):
             logger.info(f"Obtained response_id: {response_id}")
 
             tab_state = await self.get_state(FormEntryTabState)
-            field_id = tab_state.fields[tab_state.active_tab][-1].id
+            if not 0 <= tab_state.active_tab < len(tab_state.fields):
+                logger.warning(
+                    "Cannot load chat for stale tab %s (available tabs: %s)",
+                    tab_state.active_tab,
+                    len(tab_state.fields),
+                )
+                self.error = (
+                    "This survey page changed before the chat loaded. "
+                    "Please return to the survey and try again."
+                )
+                self.loaded = True
+                return
+            active_fields = tab_state.fields[tab_state.active_tab]
+            if not active_fields:
+                logger.warning(
+                    "Cannot load chat for empty tab %s", tab_state.active_tab
+                )
+                self.error = (
+                    "This survey page has no question to discuss. "
+                    "Please return to the survey."
+                )
+                self.loaded = True
+                return
+            field_id = active_fields[-1].id
             self.field = session.exec(select(Field).where(Field.id == field_id)).first()
             if self.field is None:
                 logger.error(f"No field found with ID {field_id}")
@@ -402,7 +437,8 @@ class ChatState(rx.State):
         messages = messages[:-1]
 
         try:
-            session = client.client.chat.completions.create(
+            stream = await asyncio.to_thread(
+                client.client.chat.completions.create,
                 model=client.model,
                 messages=messages,
                 temperature=client.temperature,
@@ -418,8 +454,24 @@ class ChatState(rx.State):
             )
             return
 
-        # Stream the results, yielding after every word.
-        for item in session:
+        # The OpenAI SDK's iterator is synchronous. Pull it from a worker thread
+        # so one slow upstream stream cannot block every Reflex connection.
+        # Coalesce chunks before yielding to avoid repeatedly serializing the
+        # complete, ever-growing chat state for every token.
+        pending_chars = 0
+        last_yield = time.monotonic()
+        sentinel = object()
+
+        def next_item():
+            try:
+                return next(stream)
+            except StopIteration:
+                return sentinel
+
+        while True:
+            item = await asyncio.to_thread(next_item)
+            if item is sentinel:
+                break
             if len(item.choices) == 0:
                 continue
             if hasattr(item.choices[0].delta, "content"):
@@ -429,8 +481,19 @@ class ChatState(rx.State):
                 else:
                     answer_text = ""
                     self.chat[-1].answer += answer_text
-                self.chat = self.chat
-                yield
+                pending_chars += len(answer_text)
+                now = time.monotonic()
+                if (
+                    pending_chars >= _STREAM_UPDATE_CHARS
+                    or now - last_yield >= _STREAM_UPDATE_SECONDS
+                ):
+                    self.chat = self.chat
+                    pending_chars = 0
+                    last_yield = now
+                    yield
+        if pending_chars:
+            self.chat = self.chat
+            yield
 
         if client.end_token in self.chat[-1].answer:
             self.done = True
@@ -440,6 +503,17 @@ class ChatState(rx.State):
                 field_value = session.exec(
                     select(FieldValue).where(FieldValue.id == self.field_value_id)
                 ).first()
+                if field_value is None:
+                    logger.warning(
+                        "Chat field value %s no longer exists; ignoring stale completion",
+                        self.field_value_id,
+                    )
+                    self.processing = False
+                    self.error = (
+                        "This survey response changed while the chat was open. "
+                        "Please return to the survey and try again."
+                    )
+                    return
 
                 # Filter out system messages and save to db
                 messages = [msg for msg in messages if msg["role"] != "system"]
@@ -487,6 +561,16 @@ class ChatState(rx.State):
             field_value = session.exec(
                 select(FieldValue).where(FieldValue.id == self.field_value_id)
             ).first()
+            if field_value is None:
+                logger.warning(
+                    "Chat field value %s no longer exists; ignoring stale finish",
+                    self.field_value_id,
+                )
+                self.error = (
+                    "This survey response changed while the chat was open. "
+                    "Please return to the survey and try again."
+                )
+                return
             # Save the current chat messages
             messages = [
                 {"role": "assistant", "content": self.initial_message},

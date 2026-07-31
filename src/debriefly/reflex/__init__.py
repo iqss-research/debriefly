@@ -1,8 +1,14 @@
 import reflex as rx
 
-from debriefly.reflex import styles
-from debriefly.reflex.auth_api import register_auth_routes
-from debriefly.reflex.auth_middleware import LocalAuthMiddleware
+from debriefly.database import install_bounded_reflex_engine
+
+# Install before importing pages or middleware: all of their ``rx.session()``
+# calls must share this process-wide, bounded pool.
+install_bounded_reflex_engine()
+
+from debriefly.reflex import styles  # noqa: E402
+from debriefly.reflex.auth_api import register_auth_routes  # noqa: E402
+from debriefly.reflex.auth_middleware import LocalAuthMiddleware  # noqa: E402
 
 
 # Import page decorators before constructing the app.

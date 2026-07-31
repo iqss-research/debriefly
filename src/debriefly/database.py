@@ -1,6 +1,8 @@
 """Database configuration helpers shared by Reflex and tests."""
 
 from collections.abc import Mapping
+from functools import lru_cache
+import os
 from urllib.parse import urlsplit
 
 from sqlalchemy.engine import URL
@@ -58,3 +60,47 @@ def database_url_from_env(env: Mapping[str, str]) -> str:
         host=legacy_values["DB_HOST"],
         database=legacy_values["DB_NAME"],
     ).render_as_string(hide_password=False)
+
+
+def install_bounded_reflex_engine() -> None:
+    """Make Reflex 0.5.x reuse one bounded SQLAlchemy engine per process.
+
+    Reflex 0.5.10 creates a new engine (and therefore a new connection pool)
+    for every ``rx.session()`` call. Under load those short-lived pools can
+    collectively consume every PostgreSQL connection. Keep this compatibility
+    shim local to the pinned runtime; it can be removed after upgrading to a
+    Reflex release whose engine lifecycle is centrally managed.
+    """
+    import reflex.model as reflex_model
+    from reflex.config import get_config
+    from sqlmodel import create_engine
+
+    if getattr(reflex_model.get_engine, "_debriefly_bounded", False):
+        return
+
+    @lru_cache(maxsize=4)
+    def get_bounded_engine(url: str | None = None):
+        database_url = url or get_config().db_url
+        if database_url is None:
+            raise ValueError("No database url configured")
+
+        echo = os.getenv("SQLALCHEMY_ECHO") == "True"
+        if database_url.startswith("sqlite"):
+            return create_engine(
+                database_url,
+                echo=echo,
+                connect_args={"check_same_thread": False},
+            )
+
+        return create_engine(
+            database_url,
+            echo=echo,
+            pool_size=max(1, int(os.getenv("DB_POOL_SIZE", "5"))),
+            max_overflow=max(0, int(os.getenv("DB_MAX_OVERFLOW", "0"))),
+            pool_timeout=max(1, int(os.getenv("DB_POOL_TIMEOUT", "30"))),
+            pool_recycle=max(30, int(os.getenv("DB_POOL_RECYCLE", "1800"))),
+            pool_pre_ping=True,
+        )
+
+    get_bounded_engine._debriefly_bounded = True
+    reflex_model.get_engine = get_bounded_engine
