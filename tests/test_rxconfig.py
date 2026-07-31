@@ -1,13 +1,34 @@
 import pytest
 from sqlalchemy.engine import make_url
 
-from debriefly.database import database_url_from_env
+from debriefly.database import database_url_from_env, install_bounded_reflex_engine
 
 
 def test_explicit_db_url_is_honored_without_db_name():
     db_url = "postgresql://explicit-user:explicit-pass@db.example/debriefly"
 
     assert database_url_from_env({"DB_URL": db_url}) == db_url
+
+
+def test_reflex_reuses_one_bounded_engine_per_database(monkeypatch, tmp_path):
+    import reflex.model as reflex_model
+
+    monkeypatch.setenv("DB_POOL_SIZE", "3")
+    monkeypatch.setenv("DB_MAX_OVERFLOW", "1")
+    install_bounded_reflex_engine()
+    reflex_model.get_engine.cache_clear()
+
+    sqlite_url = f"sqlite:///{tmp_path / 'shared.db'}"
+    first = reflex_model.get_engine(sqlite_url)
+    second = reflex_model.get_engine(sqlite_url)
+
+    assert first is second
+
+    postgres = reflex_model.get_engine(
+        "postgresql+psycopg2://user:pass@db.invalid/debriefly"
+    )
+    assert postgres.pool.size() == 3
+    assert postgres.pool._max_overflow == 1
 
 
 def test_explicit_db_url_takes_precedence_over_legacy_configuration():

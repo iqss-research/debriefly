@@ -156,20 +156,11 @@ def action_bar() -> rx.Component:
                                 on_click=ChatState.finish_chat,
                             ),
                         ),
-                        # Timer readout
                         rx.text(
                             "Elapsed: " + ChatState.elapsed_time_str,
-                            # + " / Min: "
-                            # + ChatState.min_time_str
-                            # + " – Max: "
-                            # + ChatState.max_time_str,
                             font_size="sm",
                             color="gray.600",
                         ),
-                        # rx.tooltip(
-                        #    rx.icon("info", size=18),
-                        #    content="You can finish the conversation after the min time has elapsed. The max time is the time limit for the conversation.",
-                        # ),
                         align_items="center",
                         spacing="2",
                     ),

@@ -768,6 +768,10 @@ def resolve_cookie_session(cookie_header: str, *, origin: str) -> User | None:
             auth_session.last_seen_at = now
             session.add(auth_session)
             session.commit()
+            # Session.commit() expires every loaded ORM object by default.
+            # Reload the profile before detaching it so middleware can safely
+            # read its scalar attributes after this context closes.
+            session.refresh(user)
         # Detach the non-sensitive user profile before the DB session closes.
         session.expunge(user)
         return user

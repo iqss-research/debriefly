@@ -101,9 +101,17 @@ class FormEntryState(rx.State):
     async def handle_submit(self, form_data):
         logger.info("Handling form submission")
         tab_state = await self.get_state(FormEntryTabState)
-        debriefing_fields = [
-            f for f in tab_state.fields[tab_state.active_tab] if f.debriefing
-        ]
+        if not 0 <= tab_state.active_tab < len(tab_state.fields):
+            logger.warning(
+                "Ignoring stale form submission for tab %s (available tabs: %s)",
+                tab_state.active_tab,
+                len(tab_state.fields),
+            )
+            return rx.toast.error(
+                "This survey page changed before it was saved. Please reload it."
+            )
+        active_fields = list(tab_state.fields[tab_state.active_tab])
+        debriefing_fields = [field for field in active_fields if field.debriefing]
         # Get the first debriefing field
         debriefing_field = debriefing_fields[0] if len(debriefing_fields) > 0 else None
 
@@ -117,16 +125,18 @@ class FormEntryState(rx.State):
                 response = Response(
                     client_token=self._ensure_client_token(), form_id=self.form.id
                 )
+                session.add(response)
+                session.flush()
 
             # only consider fields that were submitted as part of the tab (page)
-            for field in tab_state.fields[tab_state.active_tab]:
+            for field in active_fields:
                 # delete any previously-submitted field values
-                field_value = session.exec(
+                field_values = session.exec(
                     select(FieldValue)
                     .where(FieldValue.field_id == field.id)
                     .where(FieldValue.response_id == response.id)
-                ).first()
-                if field_value is not None:
+                ).all()
+                for field_value in field_values:
                     session.delete(field_value)
 
                 if field.bundled:
@@ -166,9 +176,11 @@ class FormEntryState(rx.State):
                                     FieldValue(field_id=field.id, value=form_data[key])
                                 )
 
-                response.ts = datetime.now(timezone.utc)
-                session.add(response)
-                session.commit()
+            response.ts = datetime.now(timezone.utc)
+            session.add(response)
+            # A page submission is one unit of work. Committing inside the field
+            # loop held more connections and exposed partially-saved pages.
+            session.commit()
 
         if debriefing_field is not None:
             logger.info("Redirecting to chat")
