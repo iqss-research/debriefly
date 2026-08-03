@@ -61,6 +61,7 @@ class FormEntryState(rx.State):
     client_token: str = rx.Cookie("")
     is_preview: bool = False
     current_scale_values: dict[str, int] = {}
+    pending_debriefing_field_id: int = -1
 
     def set_scale_value(self, name: str, v: str):
         """Store the value coming from the slider (string → int)."""
@@ -100,6 +101,8 @@ class FormEntryState(rx.State):
 
     async def handle_submit(self, form_data):
         logger.info("Handling form submission")
+        # A chat is valid only after this submission commits successfully.
+        self.pending_debriefing_field_id = -1
         tab_state = await self.get_state(FormEntryTabState)
         if not 0 <= tab_state.active_tab < len(tab_state.fields):
             logger.warning(
@@ -139,6 +142,10 @@ class FormEntryState(rx.State):
                 for field_value in field_values:
                     session.delete(field_value)
 
+                # Add replacements directly to the session. The response's
+                # selectin-loaded relationship can still contain a value after a
+                # later query autoflushes its deletion; cascading through that
+                # collection again raises "Instance ... has been deleted".
                 if field.bundled:
                     bundle_answers = []
                     for item in field.bundle_items:
@@ -152,18 +159,20 @@ class FormEntryState(rx.State):
                                 }
                             )
                     if bundle_answers:
-                        response.field_values.append(
+                        session.add(
                             FieldValue(
                                 field_id=field.id,
+                                response_id=response.id,
                                 value=json.dumps(bundle_answers),
                             )
                         )
                 else:
                     value = form_data.get(field.name, Missing)
                     if value is not Missing:
-                        response.field_values.append(
+                        session.add(
                             FieldValue(
                                 field_id=field.id,
+                                response_id=response.id,
                                 value=value,
                             )
                         )
@@ -172,17 +181,24 @@ class FormEntryState(rx.State):
                             key = f"{field.name}___{option.value or option.label or option.id}"
                             value = form_data.get(key, Missing)
                             if value is not Missing:
-                                response.field_values.append(
-                                    FieldValue(field_id=field.id, value=form_data[key])
+                                session.add(
+                                    FieldValue(
+                                        field_id=field.id,
+                                        response_id=response.id,
+                                        value=form_data[key],
+                                    )
                                 )
 
             response.ts = datetime.now(timezone.utc)
-            session.add(response)
+            # Existing responses are persistent, and new responses were flushed
+            # above, so the timestamp and direct child additions are tracked.
             # A page submission is one unit of work. Committing inside the field
             # loop held more connections and exposed partially-saved pages.
             session.commit()
 
         if debriefing_field is not None:
+            if debriefing_field.id is not None:
+                self.pending_debriefing_field_id = debriefing_field.id
             logger.info("Redirecting to chat")
             return rx.redirect(routes.FORM_ENTRY_CHAT)
         elif "done" in form_data:
