@@ -84,6 +84,18 @@ def _bundle_response_context(field: Field, raw_value: str):
     return response_text or raw_value, subquestions, response_text or raw_value
 
 
+def _debriefing_field_id_for_chat(
+    active_fields: list[Field], pending_field_id: int
+) -> Optional[int]:
+    """Validate the exact debriefing field pinned by a successful submission."""
+    field_ids = [
+        field.id
+        for field in active_fields
+        if field.id == pending_field_id and bool(field.debriefing)
+    ]
+    return field_ids[0] if len(field_ids) == 1 else None
+
+
 class QA(rx.Base):
     question: str
     answer: str
@@ -174,8 +186,11 @@ class ChatState(rx.State):
 
     async def on_load(self):
         logger.info("ChatState on_load")
+        self.loaded = False
         self.done = False
         self.error = ""
+        self.chat = []
+        self.field_value_id = -1
         self.chat_start_time = time.time()
         self.show_finish = False
         self.show_force_finish = False
@@ -246,10 +261,37 @@ class ChatState(rx.State):
                 )
                 self.loaded = True
                 return
-            field_id = active_fields[-1].id
+            field_id = _debriefing_field_id_for_chat(
+                active_fields, entry_state.pending_debriefing_field_id
+            )
+            if field_id is None:
+                logger.warning(
+                    "Cannot load chat for tab %s: submitted debriefing field %s "
+                    "is not active",
+                    tab_state.active_tab,
+                    entry_state.pending_debriefing_field_id,
+                )
+                self.error = (
+                    "This debriefing page is no longer active. "
+                    "Please return to the survey and continue from there."
+                )
+                self.loaded = True
+                return
             self.field = session.exec(select(Field).where(Field.id == field_id)).first()
-            if self.field is None:
-                logger.error(f"No field found with ID {field_id}")
+            if (
+                self.field is None
+                or self.field.form_id != self.this_form_id
+                or not bool(self.field.debriefing)
+            ):
+                logger.error(
+                    "Submitted debriefing field %s is not valid for form %s",
+                    field_id,
+                    self.this_form_id,
+                )
+                self.error = (
+                    "This debriefing question could not be loaded. "
+                    "Please return to the survey and try again."
+                )
                 self.loaded = True
                 return
             field_type = self.field.type_
@@ -261,6 +303,10 @@ class ChatState(rx.State):
             if field_value is None:
                 logger.error(
                     f"No field value found for field ID {field_id} and response ID {response_id}"
+                )
+                self.error = (
+                    "Your answer for this debriefing question could not be loaded. "
+                    "Please return to the survey and answer the question before continuing."
                 )
                 self.loaded = True
                 return
