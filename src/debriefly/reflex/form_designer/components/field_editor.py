@@ -17,6 +17,9 @@ from debriefly.reflex.form_designer.components.form_editor import (
 )
 from debriefly.openai import check_prompt_compliance, PromptVerdict
 
+
+PROMPT_COMPLIANCE_VALIDATION_ENABLED = False
+
 # from debriefly.reflex.form_designer.components.field_view import field_input
 # import uuid
 # from debriefly.reflex.backend.models import Form
@@ -224,12 +227,11 @@ class FieldEditorState(AppState):
 
         self.error = ""  # clear the error message
 
-        # check system prompt
         sys_prompt = form_data.get("custom_system_message", "").strip()
         init_msg = form_data.get("custom_initial_message", "").strip()
         is_debriefing = bool(form_data.get("debriefing")) or self.field.debriefing
 
-        # Every debriefing is automated, so all custom prompts are checked.
+        # Every debriefing is automated and requires a configured API key.
         if is_debriefing:
             with rx.session() as session:
                 settings = UserOpenAISettings.get_for_user(session, self.user_id)
@@ -240,28 +242,29 @@ class FieldEditorState(AppState):
                 )
                 return
 
-            for which, txt in {
-                "system prompt": sys_prompt,
-                "initial message": init_msg,
-            }.items():
-                if not txt:
-                    continue
+            if PROMPT_COMPLIANCE_VALIDATION_ENABLED:
+                for which, txt in {
+                    "system prompt": sys_prompt,
+                    "initial message": init_msg,
+                }.items():
+                    if not txt:
+                        continue
 
-                try:
-                    verdict = check_prompt_compliance(
-                        txt,
-                        api_key=settings.api_key,
-                        api_model=settings.model,
-                    )
-                except Exception:
-                    self.error = (
-                        "Could not validate the prompt with your OpenAI API key."
-                    )
-                    return
+                    try:
+                        verdict = check_prompt_compliance(
+                            txt,
+                            api_key=settings.api_key,
+                            api_model=settings.model,
+                        )
+                    except Exception:
+                        self.error = (
+                            "Could not validate the prompt with your OpenAI API key."
+                        )
+                        return
 
-                if verdict == PromptVerdict.REJECT:
-                    self.error = f"{which.title()} rejected. Your prompt must be about cognitive debriefing."
-                    return  # abort save, stay in modal
+                    if verdict == PromptVerdict.REJECT:
+                        self.error = f"{which.title()} rejected. Your prompt must be about cognitive debriefing."
+                        return  # abort save, stay in modal
 
         # if self.field.type_ == FieldType.static:
         #    self.field.prompt = form_data["prompt"]
