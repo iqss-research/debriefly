@@ -144,7 +144,7 @@ the production image before that runbook's dry run is conflict-free.
 2. Update the same `X.Y.Z` version in `src/debriefly/__init__.py` and
    `pyproject.toml`.
 3. Run the full test suite and
-   `python3 scripts/check_migration_head.py f6b7c8d9e0a1`.
+   `python3 scripts/check_migration_head.py 2f4c8a1d9e7b`.
 4. Tag the merged `main` commit with that exact version and push the tag. The
    `deploy` workflow reruns the full tests and rejects a tag whose commit is not
    contained in `main` or whose name differs from the application version.

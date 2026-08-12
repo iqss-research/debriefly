@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 
 
 DEPLOYED_REVISION = "dc22fdc7aa86"
-LOCAL_AUTH_REVISION = "f6b7c8d9e0a1"
+CURRENT_SCHEMA_REVISION = "2f4c8a1d9e7b"
 POSTGRES_TEST_URL_ENV = "DEBRIEFLY_TEST_POSTGRES_URL"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -109,6 +109,27 @@ def _assert_auth_schema(engine) -> None:
         assert names <= actual_names
 
 
+def _assert_interview_provenance_schema(engine) -> None:
+    inspector = inspect(engine)
+    expected_columns = {
+        "interview_model",
+        "interview_model_versions",
+        "interview_prompt_version",
+        "interview_system_prompt",
+        "interview_initial_prompt",
+    }
+    for table_name in ("fieldvalue", "qualtrics_embed_session"):
+        columns = {
+            column["name"]: column
+            for column in inspector.get_columns(table_name)
+            if column["name"] in expected_columns
+        }
+        assert set(columns) == expected_columns
+        for column in columns.values():
+            assert column["nullable"] is False
+            assert column["default"] is not None
+
+
 def _exercise_upgrade(database_url: str) -> None:
     config = _config(database_url)
     engine = create_engine(database_url)
@@ -176,9 +197,10 @@ def _exercise_upgrade(database_url: str) -> None:
         )
         assert (
             connection.scalar(text("SELECT version_num FROM alembic_version"))
-            == LOCAL_AUTH_REVISION
+            == CURRENT_SCHEMA_REVISION
         )
     _assert_auth_schema(engine)
+    _assert_interview_provenance_schema(engine)
 
     # Exercise the write shape of the released Clerk-backed 0.8.0 models after
     # the additive upgrade. Server defaults must supply every new non-null
@@ -246,6 +268,81 @@ def _exercise_upgrade(database_url: str) -> None:
         assert connection.scalar(
             text("SELECT interviewer_mode FROM field WHERE id = 125")
         ) in (False, 0)
+        connection.execute(
+            text(
+                """
+                INSERT INTO response (id, client_token, form_id)
+                VALUES (:id, :client_token, :form_id)
+                """
+            ),
+            {"id": 126, "client_token": "rollback-response", "form_id": 124},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO fieldvalue
+                    (id, field_id, response_id, value, debriefing)
+                VALUES
+                    (:id, :field_id, :response_id, :value, :debriefing)
+                """
+            ),
+            {
+                "id": 127,
+                "field_id": 125,
+                "response_id": 126,
+                "value": "legacy answer",
+                "debriefing": None,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO qualtrics_embed_session
+                    (id, public_id, form_id, source, external_response_id,
+                     external_question_id, question_text, response_text,
+                     transcript, completed, created_at, updated_at)
+                VALUES
+                    (:id, :public_id, :form_id, :source,
+                     :external_response_id, :external_question_id,
+                     :question_text, :response_text, :transcript, :completed,
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """
+            ),
+            {
+                "id": 128,
+                "public_id": "rollback-embed",
+                "form_id": 124,
+                "source": "qualtrics",
+                "external_response_id": "R_rollback",
+                "external_question_id": "QID1",
+                "question_text": "Legacy question",
+                "response_text": "Legacy response",
+                "transcript": None,
+                "completed": False,
+            },
+        )
+        provenance = connection.execute(
+            text(
+                """
+                SELECT interview_model, interview_model_versions,
+                       interview_prompt_version, interview_system_prompt,
+                       interview_initial_prompt
+                FROM fieldvalue WHERE id = 127
+                """
+            )
+        ).one()
+        assert tuple(provenance) == ("", "", "", "", "")
+        embed_provenance = connection.execute(
+            text(
+                """
+                SELECT interview_model, interview_model_versions,
+                       interview_prompt_version, interview_system_prompt,
+                       interview_initial_prompt
+                FROM qualtrics_embed_session WHERE id = 128
+                """
+            )
+        ).one()
+        assert tuple(embed_provenance) == ("", "", "", "", "")
 
     command.downgrade(config, DEPLOYED_REVISION)
 

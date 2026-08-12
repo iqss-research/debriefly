@@ -35,6 +35,7 @@ class Client:
         system_message="",
         temperature=0.7,
         end_token="<end_of_chat>",
+        append_end_token_instruction=True,
     ):
 
         api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -49,7 +50,7 @@ class Client:
         self.end_token = end_token
 
         self.system_message = system_message
-        if self.end_token:
+        if self.end_token and append_end_token_instruction:
             self.system_message += f"\nInclude the special {self.end_token} token in the response to end the chat."
 
         logger.debug("Instantiating OpenAI client")
@@ -122,6 +123,7 @@ def get_client(
     api_version=None,
     api_endpoint=None,
     api_model=None,
+    append_end_token_instruction=True,
 ):
     try:
         client = Client(
@@ -129,6 +131,7 @@ def get_client(
             api_version=api_version,
             api_endpoint=api_endpoint,
             api_model=api_model,
+            append_end_token_instruction=append_end_token_instruction,
             initial_message=initial_message,
             system_message=system_message,
             temperature=temperature,

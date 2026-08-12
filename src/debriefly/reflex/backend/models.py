@@ -359,6 +359,15 @@ class FieldValue(rx.Model, table=True):
     response_id: int = sqlmodel.Field(foreign_key="response.id")
     value: str
     debriefing: Optional[str]
+    interview_model: str = ""
+    interview_model_versions: str = ""
+    interview_prompt_version: str = ""
+    interview_system_prompt: str = sqlmodel.Field(
+        default="", sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=False)
+    )
+    interview_initial_prompt: str = sqlmodel.Field(
+        default="", sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=False)
+    )
 
     field: Field = sqlmodel.Relationship(sa_relationship_kwargs={"lazy": "selectin"})
 
@@ -418,6 +427,15 @@ class QualtricsEmbedSession(rx.Model, table=True):
     )
     transcript: Optional[str] = sqlmodel.Field(
         default=None, sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=True)
+    )
+    interview_model: str = ""
+    interview_model_versions: str = ""
+    interview_prompt_version: str = ""
+    interview_system_prompt: str = sqlmodel.Field(
+        default="", sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=False)
+    )
+    interview_initial_prompt: str = sqlmodel.Field(
+        default="", sa_column=sqlmodel.Column(sqlmodel.Text(), nullable=False)
     )
     completed: bool = False
     created_at: datetime = sqlmodel.Field(

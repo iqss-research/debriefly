@@ -73,7 +73,7 @@ def test_clerk_rollback_build_requires_an_immutable_base_image():
     assert "@sha256:[0-9a-fA-F]{64}$" in validation
     assert "git tag --points-at HEAD" in validation
     assert 'check_release_version.py "$RELEASE_TAG"' in validation
-    assert "check_migration_head.py f6b7c8d9e0a1" in validation
+    assert "check_migration_head.py 2f4c8a1d9e7b" in validation
 
     build = steps["Build and push the Clerk rollback image"]
     assert build["with"]["file"] == "Dockerfile.clerk-rollback"

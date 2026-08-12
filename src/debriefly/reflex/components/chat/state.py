@@ -9,6 +9,7 @@ from sqlmodel import select, or_
 from jinja2 import Environment, PackageLoader, select_autoescape
 import logging
 from debriefly.openai import get_client
+from debriefly.interview_provenance import merge_model_version, snapshot_interview
 from debriefly.reflex.backend.models import (
     Response,
     FieldValue,
@@ -114,6 +115,8 @@ class ChatState(rx.State):
     error: str = ""
     system_message: str
     initial_message: str
+    configured_model: str = ""
+    api_reported_model_versions: str = ""
     field: Field = Field(
         min_debriefing_time=0, max_debriefing_time=0
     )  # Default value to avoid None
@@ -141,6 +144,23 @@ class ChatState(rx.State):
     def max_time_str(self) -> str:
         m = (self.field.max_debriefing_time or 0) // 60
         return f"{m:02d}:00"
+
+    def _record_api_model_version(self, model_version: str | None) -> None:
+        versions = merge_model_version(
+            self.api_reported_model_versions,
+            model_version,
+        )
+        if versions == self.api_reported_model_versions:
+            return
+
+        self.api_reported_model_versions = versions
+        with rx.session() as session:
+            field_value = session.get(FieldValue, self.field_value_id)
+            if field_value is None:
+                return
+            field_value.interview_model_versions = versions
+            session.add(field_value)
+            session.commit()
 
     @rx.background
     async def count_time(self):
@@ -191,6 +211,8 @@ class ChatState(rx.State):
         self.error = ""
         self.chat = []
         self.field_value_id = -1
+        self.configured_model = ""
+        self.api_reported_model_versions = ""
         self.chat_start_time = time.time()
         self.show_finish = False
         self.show_force_finish = False
@@ -402,6 +424,41 @@ class ChatState(rx.State):
             )
             if settings is None or not settings.is_configured:
                 self.error = "This survey is not ready for chat. Please contact the survey owner."
+            else:
+                if field_value.interview_model:
+                    # Keep a resumed interview on its original model and exact
+                    # prompts even if the survey owner edited their settings.
+                    self.configured_model = field_value.interview_model
+                    self.api_reported_model_versions = (
+                        field_value.interview_model_versions
+                    )
+                    self.system_message = field_value.interview_system_prompt
+                    self.initial_message = field_value.interview_initial_prompt
+                    self.chat = [QA(question="", answer=self.initial_message)]
+                elif field_value.debriefing is not None:
+                    # Never assign today's settings to a historical interview
+                    # that predates provenance capture.
+                    self.done = True
+                    self.error = (
+                        "This completed interview predates model and prompt "
+                        "tracking and cannot be resumed."
+                    )
+                else:
+                    client = get_client(
+                        missing_ok=False,
+                        initial_message=self.initial_message,
+                        system_message=self.system_message,
+                        api_key=settings.api_key,
+                        api_model=settings.model,
+                    )
+                    snapshot_interview(field_value, client)
+                    self.configured_model = client.model
+                    self.system_message = client.system_message
+                    self.initial_message = client.initial_message
+                    # The snapshot must exist before the first API call. It
+                    # therefore also survives a network error or forced finish.
+                    session.add(field_value)
+                    session.commit()
 
             if (
                 not self.error
@@ -447,7 +504,7 @@ class ChatState(rx.State):
                 return
 
             api_key = settings.api_key
-            api_model = settings.model
+            api_model = self.configured_model or settings.model
 
         client = get_client(
             missing_ok=False,
@@ -455,6 +512,7 @@ class ChatState(rx.State):
             system_message=self.system_message,
             api_key=api_key,
             api_model=api_model,
+            append_end_token_instruction=False,
         )
 
         # Add the question to the list of questions.
@@ -518,6 +576,9 @@ class ChatState(rx.State):
             item = await asyncio.to_thread(next_item)
             if item is sentinel:
                 break
+            # Persist the provider-reported version as soon as it appears so
+            # provenance survives a later stream interruption.
+            self._record_api_model_version(getattr(item, "model", None))
             if len(item.choices) == 0:
                 continue
             if hasattr(item.choices[0].delta, "content"):

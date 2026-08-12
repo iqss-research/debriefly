@@ -8,6 +8,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from sqlmodel import select
 
 from debriefly.openai import get_client
+from debriefly.interview_provenance import merge_model_version, snapshot_interview
 from debriefly.reflex.backend.models import (
     Form,
     QualtricsEmbedSession,
@@ -73,6 +74,8 @@ class QualtricsEmbedState(rx.State):
 
     system_message: str = ""
     initial_message: str = ""
+    configured_model: str = ""
+    api_reported_model_versions: str = ""
     chat: list[QA]
 
     def _post_message(self, event_type: str, extra: dict | None = None):
@@ -102,6 +105,27 @@ class QualtricsEmbedState(rx.State):
                 messages.append({"role": "assistant", "content": qa.answer})
         return messages
 
+    def _record_api_model_version(self, model_version: str | None) -> None:
+        versions = merge_model_version(
+            self.api_reported_model_versions,
+            model_version,
+        )
+        if versions == self.api_reported_model_versions:
+            return
+
+        self.api_reported_model_versions = versions
+        with rx.session() as session:
+            record = session.exec(
+                select(QualtricsEmbedSession).where(
+                    QualtricsEmbedSession.public_id == self.session_public_id
+                )
+            ).first()
+            if record is None:
+                return
+            record.interview_model_versions = versions
+            session.add(record)
+            session.commit()
+
     def _save_transcript(self, completed: bool = False):
         if not self.session_public_id:
             return
@@ -116,6 +140,7 @@ class QualtricsEmbedState(rx.State):
                 return
 
             record.transcript = json.dumps(self._current_messages())
+            record.interview_model_versions = self.api_reported_model_versions
             record.completed = completed
             record.updated_at = datetime.now(timezone.utc)
             session.add(record)
@@ -128,6 +153,8 @@ class QualtricsEmbedState(rx.State):
         self.done = False
         self.error = ""
         self.session_public_id = ""
+        self.configured_model = ""
+        self.api_reported_model_versions = ""
         self.chat = []
 
         params = self.router.page.params
@@ -196,6 +223,13 @@ class QualtricsEmbedState(rx.State):
                 ).first()
 
             if record is None:
+                client = get_client(
+                    missing_ok=False,
+                    initial_message=self.initial_message,
+                    system_message=self.system_message,
+                    api_key=settings.api_key,
+                    api_model=settings.model,
+                )
                 record = QualtricsEmbedSession(
                     form_id=form.id,
                     external_response_id=self.external_response_id,
@@ -205,12 +239,42 @@ class QualtricsEmbedState(rx.State):
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc),
                 )
+                snapshot_interview(record, client)
+                self.configured_model = client.model
+                self.system_message = client.system_message
+                self.initial_message = client.initial_message
             else:
-                record.external_response_id = self.external_response_id
-                record.external_question_id = self.external_question_id
-                record.question_text = self.question_text
-                record.response_text = self.response_text
                 record.updated_at = datetime.now(timezone.utc)
+                self.external_response_id = record.external_response_id
+                self.external_question_id = record.external_question_id
+                self.question_text = record.question_text
+                self.response_text = record.response_text
+                if record.interview_model:
+                    self.configured_model = record.interview_model
+                    self.api_reported_model_versions = record.interview_model_versions
+                    self.system_message = record.interview_system_prompt
+                    self.initial_message = record.interview_initial_prompt
+                    self.chat = [QA(question="", answer=self.initial_message)]
+                elif not record.transcript:
+                    client = get_client(
+                        missing_ok=False,
+                        initial_message=self.initial_message,
+                        system_message=self.system_message,
+                        api_key=settings.api_key,
+                        api_model=settings.model,
+                    )
+                    snapshot_interview(record, client)
+                    self.configured_model = client.model
+                    self.system_message = client.system_message
+                    self.initial_message = client.initial_message
+                elif not record.completed:
+                    # Continuing a legacy interview would mix untracked prior
+                    # turns with a newly configured model and prompt.
+                    self.error = (
+                        "This interview began before model and prompt tracking "
+                        "was enabled and cannot be resumed. Please start a new "
+                        "interview."
+                    )
                 if record.transcript:
                     try:
                         messages = json.loads(record.transcript)
@@ -226,6 +290,8 @@ class QualtricsEmbedState(rx.State):
             self.session_public_id = record.public_id
 
         self.loaded = True
+        if self.error:
+            return self._post_message("error")
         return self._post_message("ready")
 
     async def process_question(self, form_data: dict[str, str]):
@@ -250,7 +316,7 @@ class QualtricsEmbedState(rx.State):
                 yield self._post_message("error")
                 return
             api_key = settings.api_key
-            api_model = settings.model
+            api_model = self.configured_model or settings.model
 
         client = get_client(
             missing_ok=False,
@@ -258,6 +324,7 @@ class QualtricsEmbedState(rx.State):
             system_message=self.system_message,
             api_key=api_key,
             api_model=api_model,
+            append_end_token_instruction=False,
         )
 
         messages = [
@@ -285,6 +352,9 @@ class QualtricsEmbedState(rx.State):
             return
 
         for item in completion:
+            # Persist the provider-reported version as soon as it appears so
+            # provenance survives a later stream interruption.
+            self._record_api_model_version(getattr(item, "model", None))
             if len(item.choices) == 0:
                 continue
             if hasattr(item.choices[0].delta, "content"):

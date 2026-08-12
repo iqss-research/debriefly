@@ -80,7 +80,8 @@ After respondents complete the survey:
 
 1. Select the survey from **Existing Surveys**.
 2. Click **View Results**.
-3. Expand a response to see answers and debriefing transcripts.
+3. Expand a response to see answers, debriefing transcripts, and the exact
+   model and prompt configuration recorded for each interview.
 4. Click **Download Results** to export a CSV file with answers and metadata.
 5. Click **Download Chats** to export all debriefing transcripts as a text file.
 

@@ -139,11 +139,12 @@ python3 scripts/apply_schema_migrations.py
 ```
 
 The migration chain includes the legacy human-interview revision
-`a3f2b1c4d5e6` and local-auth revision `f6b7c8d9e0a1`. The application no
+`a3f2b1c4d5e6`, local-auth revision `f6b7c8d9e0a1`, and interview-provenance
+revision `2f4c8a1d9e7b`. The application no
 longer exposes human interview mode, but the legacy revision must remain in the
 chain for existing databases and rollback images. The command fails unless the
 database reaches the code's sole head and prints
-`Database schema is current at f6b7c8d9e0a1.` on success. The revisions after
+`Database schema is current at 2f4c8a1d9e7b.` on success. The revisions after
 the previously deployed `dc22fdc7aa86` head are additive.
 
 ## Final maintenance-window export and import

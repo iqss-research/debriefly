@@ -6,7 +6,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL_AUTH_REVISION = "f6b7c8d9e0a1"
+CURRENT_SCHEMA_REVISION = "2f4c8a1d9e7b"
 
 _SPEC = importlib.util.spec_from_file_location(
     "apply_schema_migrations",
@@ -38,7 +38,7 @@ def test_schema_runner_applies_the_committed_head(monkeypatch, tmp_path):
     engine = create_engine(database_url)
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            LOCAL_AUTH_REVISION
+            CURRENT_SCHEMA_REVISION
         )
     engine.dispose()
 
@@ -56,7 +56,7 @@ def test_schema_runner_preserves_percent_encoded_database_urls():
 
 def test_release_has_one_expected_migration_head():
     assert check_migration_head.migration_heads(ROOT / "alembic/versions") == {
-        LOCAL_AUTH_REVISION
+        CURRENT_SCHEMA_REVISION
     }
 
 
@@ -73,7 +73,7 @@ def test_clerk_rollback_image_keeps_clerk_code_and_fails_on_migration_error():
     assert "COPY src/debriefly/database.py" in dockerfile
     assert "COPY scripts/check_migration_head.py" in dockerfile
     assert "COPY scripts/apply_schema_migrations.py" in dockerfile
-    assert LOCAL_AUTH_REVISION in dockerfile
+    assert CURRENT_SCHEMA_REVISION in dockerfile
 
     startup = dockerfile.rsplit("\nCMD ", 1)[1]
     assert "set -eu" in startup

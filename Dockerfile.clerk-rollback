@@ -8,7 +8,7 @@ ARG CLERK_BASE_IMAGE
 LABEL org.opencontainers.image.title="Debriefly Clerk rollback image" \
       org.opencontainers.image.description="Clerk 0.8.0 with the current additive Alembic chain" \
       debriefly.rollback.base-image="${CLERK_BASE_IMAGE}" \
-      debriefly.rollback.schema-head="f6b7c8d9e0a1"
+      debriefly.rollback.schema-head="2f4c8a1d9e7b"
 
 WORKDIR /app
 
@@ -38,9 +38,10 @@ COPY scripts/apply_schema_migrations.py /app/scripts/apply_schema_migrations.py
 # migration.  The shell command below deliberately fails the container startup
 # when a migration fails; the original 0.8.0 CMD masked that failure via `||`.
 RUN test -f /app/alembic/versions/f6b7c8d9e0a1_add_local_auth_schema.py && \
+    test -f /app/alembic/versions/2f4c8a1d9e7b_add_interview_provenance.py && \
     test -f /app/alembic.ini && \
     test -f /app/scripts/apply_schema_migrations.py && \
-    python3 /app/scripts/check_migration_head.py f6b7c8d9e0a1
+    python3 /app/scripts/check_migration_head.py 2f4c8a1d9e7b
 
 CMD set -eu; \
     python3 scripts/apply_schema_migrations.py; \

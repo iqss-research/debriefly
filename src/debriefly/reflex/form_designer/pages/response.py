@@ -255,6 +255,15 @@ class ResponsesState(AppState):
                 header.append(field.name)
             if field.debriefing:
                 header.append(f"{field.name}_debriefing")
+                header.extend(
+                    [
+                        f"{field.name}_configured_model",
+                        f"{field.name}_api_reported_model_versions",
+                        f"{field.name}_prompt_version",
+                        f"{field.name}_system_prompt",
+                        f"{field.name}_initial_prompt",
+                    ]
+                )
 
         with io.StringIO() as f:
             writer = csv.writer(f)
@@ -276,7 +285,7 @@ class ResponsesState(AppState):
                         else:
                             row.append("")
                         if field.debriefing:
-                            row.append("")
+                            row.extend(["", "", "", "", "", ""])
                     else:
                         if field.bundled:
                             answers = bundle_answer_map(field_value[0].value)
@@ -285,7 +294,16 @@ class ResponsesState(AppState):
                         else:
                             row.append(field_value[0].value)
                         if field.debriefing:
-                            row.append(field_value[0].debriefing)
+                            row.extend(
+                                [
+                                    field_value[0].debriefing,
+                                    field_value[0].interview_model,
+                                    field_value[0].interview_model_versions,
+                                    field_value[0].interview_prompt_version,
+                                    field_value[0].interview_system_prompt,
+                                    field_value[0].interview_initial_prompt,
+                                ]
+                            )
 
                 writer.writerow(row)
 
@@ -380,6 +398,90 @@ def debriefing_transcript(response: Response, field_value: FieldValue):
     )
 
 
+def _prompt_snapshot(label: str, prompt: str, value: str):
+    return rx.accordion.item(
+        header=rx.text(label, weight="medium"),
+        content=rx.box(
+            rx.text(
+                prompt,
+                white_space="pre-wrap",
+                font_family="monospace",
+                font_size="0.85em",
+                overflow_wrap="anywhere",
+            ),
+            background_color=rx.color("gray", 2),
+            border_radius="6px",
+            padding="1em",
+            width="100%",
+        ),
+        value=value,
+    )
+
+
+def interview_configuration(
+    configured_model: str,
+    model_versions: str,
+    prompt_version: str,
+    system_prompt: str,
+    initial_prompt: str,
+):
+    """Show the immutable model and prompt snapshot for one interview."""
+    return rx.box(
+        rx.heading("Interview configuration", size="3", margin_bottom="0.5em"),
+        rx.cond(
+            configured_model != "",
+            rx.vstack(
+                rx.hstack(
+                    rx.text("Configured model:", weight="bold"),
+                    rx.code(configured_model, overflow_wrap="anywhere"),
+                    align="center",
+                ),
+                rx.hstack(
+                    rx.text("API-reported model version:", weight="bold"),
+                    rx.cond(
+                        model_versions != "",
+                        rx.code(model_versions, overflow_wrap="anywhere"),
+                        rx.text("Not reported"),
+                    ),
+                    align="center",
+                ),
+                rx.hstack(
+                    rx.text("Prompt fingerprint:", weight="bold"),
+                    rx.code(prompt_version, overflow_wrap="anywhere"),
+                    align="center",
+                ),
+                rx.accordion.root(
+                    _prompt_snapshot(
+                        "System prompt sent to the model",
+                        system_prompt,
+                        "system-prompt",
+                    ),
+                    _prompt_snapshot(
+                        "Initial assistant message",
+                        initial_prompt,
+                        "initial-prompt",
+                    ),
+                    type="multiple",
+                    collapsible=True,
+                    width="100%",
+                ),
+                align="start",
+                width="100%",
+            ),
+            rx.text(
+                "Configuration unavailable — this interview was collected "
+                "before model and prompt tracking was enabled.",
+                color=rx.color("gray", 11),
+            ),
+        ),
+        border="1px solid",
+        border_color=rx.color("gray", 6),
+        border_radius="8px",
+        padding="1em",
+        width="100%",
+    )
+
+
 def qualtrics_embed_transcript(embed_session: QualtricsEmbedSession):
     return rx.vstack(
         rx.foreach(
@@ -448,6 +550,13 @@ def qualtrics_embed_content(embed_session: QualtricsEmbedSession):
             rx.markdown(embed_session.response_text),
             width="100%",
         ),
+        interview_configuration(
+            embed_session.interview_model,
+            embed_session.interview_model_versions,
+            embed_session.interview_prompt_version,
+            embed_session.interview_system_prompt,
+            embed_session.interview_initial_prompt,
+        ),
         qualtrics_embed_transcript(embed_session),
         align="start",
         gap="1em",
@@ -490,8 +599,21 @@ def response_content(response: Response):
                     rx.text("No response provided."),
                 ),
                 rx.cond(
-                    fv.field.debriefing,
-                    debriefing_transcript(response, fv),
+                    fv.field.debriefing
+                    | (fv.interview_model != "")
+                    | rx.cond(fv.debriefing, True, False),
+                    rx.vstack(
+                        interview_configuration(
+                            fv.interview_model,
+                            fv.interview_model_versions,
+                            fv.interview_prompt_version,
+                            fv.interview_system_prompt,
+                            fv.interview_initial_prompt,
+                        ),
+                        debriefing_transcript(response, fv),
+                        align="start",
+                        width="100%",
+                    ),
                     rx.spacer(),
                 ),
                 align="start",
