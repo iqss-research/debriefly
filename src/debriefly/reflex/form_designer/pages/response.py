@@ -404,6 +404,7 @@ def _prompt_snapshot(label: str, prompt: str, value: str):
         content=rx.box(
             rx.text(
                 prompt,
+                color=rx.color("gray", 12),
                 white_space="pre-wrap",
                 font_family="monospace",
                 font_size="0.85em",

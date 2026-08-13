@@ -91,6 +91,10 @@ def test_results_configuration_renders_models_version_and_exact_prompts():
     ):
         assert expected in rendered
 
+    # Accordion content otherwise inherits the accent color, which can render
+    # white text on the prompt snapshot's light neutral background.
+    assert '"color": "var(--gray-12)"' in rendered
+
 
 def test_results_configuration_explains_legacy_interviews():
     rendered = str(interview_configuration("", "", "", "", ""))
