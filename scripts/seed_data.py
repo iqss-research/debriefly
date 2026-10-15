@@ -7,7 +7,8 @@ from debriefly.reflex.backend.models import Config
 
 def init_seed_data():
 
-    dotenv.load_dotenv()
+    if not os.getenv("DEBRIEFLY_LAMBDA"):
+        dotenv.load_dotenv()
 
     with rx.session() as session:
         # A basic check to see if we need to populate anything.

@@ -4,11 +4,13 @@ from debriefly.reflex.template import template
 from debriefly.reflex import styles
 from debriefly.reflex.form_designer import style
 from pathlib import Path
+import os
 
 # from debriefly.reflex.views.analyze import main as analyze_main
 from debriefly.reflex.backend.backend import MainState
 
-load_dotenv()
+if not os.getenv("DEBRIEFLY_LAMBDA"):
+    load_dotenv()
 
 
 def _split_markdown_sections(markdown: str) -> tuple[str, list[tuple[str, str]]]:

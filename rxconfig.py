@@ -8,7 +8,8 @@ sys.path.append("src")
 
 from debriefly.database import database_url_from_env  # noqa: E402
 
-dotenv.load_dotenv()
+if not os.getenv("DEBRIEFLY_LAMBDA"):
+    dotenv.load_dotenv()
 db_url = database_url_from_env(os.environ)
 
 allowed_origins = [

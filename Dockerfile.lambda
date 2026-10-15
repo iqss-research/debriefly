@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1.7
+FROM public.ecr.aws/docker/library/python:3.12-slim
+
+# Keep adapter behavior reproducible. REST API response streaming is required
+# for VPC access to the existing private PostgreSQL database.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBRIEFLY_LAMBDA=true \
+    DEBRIEFLY_REQUIRE_POSTGRESQL=true \
+    TELEMETRY_ENABLED=false \
+    AWS_LWA_PORT=8080 \
+    AWS_LWA_READINESS_CHECK_PATH=/_lambda/health \
+    AWS_LWA_INVOKE_MODE=response_stream
+
+WORKDIR /app
+COPY requirements.txt pyproject.toml README.md ./
+COPY serverless/requirements.txt /tmp/lambda-requirements.txt
+RUN pip install --requirement requirements.txt --requirement /tmp/lambda-requirements.txt
+# Keep the compatibility-tested security overrides used by the ECS image.
+RUN pip install --upgrade "Authlib==1.6.9" "h11==0.16.0" "httpcore==1.0.9" "wheel==0.47.0" \
+    && pip check
+COPY src ./src
+COPY rxconfig.py alembic.ini ./
+COPY alembic ./alembic
+COPY scripts/apply_schema_migrations.py scripts/seed_data.py ./scripts/
+COPY assets ./assets
+COPY serverless/prepare_database.py ./serverless/prepare_database.py
+RUN pip install --no-deps --editable .
+
+# No build, migrations, seed, or persistent server-side task on cold starts.
+# Everything except /tmp may be read-only in the Lambda execution environment.
+EXPOSE 8080
+CMD ["uvicorn", "debriefly.serverless.runtime:api", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--no-access-log"]

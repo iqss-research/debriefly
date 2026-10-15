@@ -2,6 +2,7 @@ import json
 from typing import Optional
 import time
 from datetime import datetime, timezone
+import os
 
 import openai
 import reflex as rx
@@ -103,6 +104,9 @@ class QA(rx.Base):
 
 
 class ChatState(rx.State):
+    # Lambda advances the existing clock through short browser-scheduled events.
+    # A backend var survives snapshot storage without becoming client-editable.
+    _lambda_timer_updated_at: float = 0.0
     chat_start_time: Optional[float] = None  # Unix timestamp when chat starts
     loaded: bool = False
     this_form_id: int = -1  # populated on on_load
@@ -206,6 +210,9 @@ class ChatState(rx.State):
 
     async def on_load(self):
         logger.info("ChatState on_load")
+        if os.getenv("DEBRIEFLY_LAMBDA"):
+            self._lambda_timer_updated_at = 0.0
+            self.timer_running = False
         self.loaded = False
         self.done = False
         self.error = ""

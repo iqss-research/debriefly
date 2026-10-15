@@ -1,5 +1,11 @@
 # Debriefly
 
+An optional AWS Lambda runtime is available for local review. It reuses the
+existing Reflex pages and application handlers, with request-based streaming
+and durable session snapshots. Start with [the Lambda review guide](serverless/README.md).
+The separate infrastructure definition is in `../debriefly-infra/lambda/`.
+This addition does not deploy or replace an existing installation.
+
 Debriefly is a web application for designing surveys, collecting responses,
 and conducting AI-assisted cognitive debriefing interviews. A hosted instance
 is available at [debriefly.net](https://www.debriefly.net).
@@ -123,8 +129,9 @@ When a model change creates an Alembic revision, review it and commit it under
 ## Production hosting requirements
 
 Debriefly can run anywhere that provides a Linux container, PostgreSQL, HTTPS,
-SMTP, and a reverse proxy with WebSocket support. Infrastructure-as-code is not
-included in this repository.
+SMTP, and a reverse proxy with WebSocket support. These requirements describe
+the existing container runtime. The optional [Lambda runtime](serverless/README.md)
+uses streamed HTTP events and a separate infrastructure proposal instead.
 
 ### Container behavior
 
